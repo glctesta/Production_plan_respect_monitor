@@ -21,9 +21,9 @@ class MonitorRow:
     planned_qty_day: int
     qty_done: int
     snapshot_time: Optional[datetime]
-    expected_by_now: float
-    projected_end_qty: float
-    projected_deficit: float
+    expected_by_now: int
+    projected_end_qty: int
+    projected_deficit: int
     status_color: str       # "green", "yellow", "red"
     in_excel_plan: bool
     is_out_of_plan: bool
@@ -44,14 +44,14 @@ def compute_projection(
     workday_start: time,
     workday_end: time,
     total_minutes: int
-) -> Tuple[float, float, float]:
+) -> Tuple[int, int, int]:
     """
     Calcola proiezione fine giornata.
-    Ritorna (expected_by_now, projected_end_qty, projected_deficit).
+    Ritorna (expected_by_now, projected_end_qty, projected_deficit) come interi.
     projected_deficit > 0 significa ritardo.
     """
     if planned_qty <= 0:
-        return (0.0, float(qty_done), 0.0)
+        return (0, qty_done, 0)
 
     now = snapshot_time
     today = now.date()
@@ -60,32 +60,32 @@ def compute_projection(
 
     # Prima dell'inizio turno
     if now <= day_start:
-        return (0.0, 0.0, 0.0)
+        return (0, 0, 0)
 
     # Dopo fine turno: confronto diretto
     if now >= day_end:
         deficit = planned_qty - qty_done
-        return (float(planned_qty), float(qty_done), max(0.0, deficit))
+        return (planned_qty, qty_done, max(0, deficit))
 
     elapsed_minutes = (now - day_start).total_seconds() / 60.0
 
     # Troppo presto per proiettare (meno di 5 minuti)
     if elapsed_minutes < 5:
-        return (0.0, 0.0, 0.0)
+        return (0, 0, 0)
 
     fraction = elapsed_minutes / total_minutes
-    expected_by_now = planned_qty * fraction
+    expected_by_now = int(round(planned_qty * fraction))
 
     if elapsed_minutes > 0:
-        projected_end_qty = qty_done / fraction
+        projected_end_qty = int(round(qty_done / fraction))
     else:
-        projected_end_qty = 0.0
+        projected_end_qty = 0
 
     projected_deficit = planned_qty - projected_end_qty
     if projected_deficit < 0:
-        projected_deficit = 0.0
+        projected_deficit = 0
 
-    return (round(expected_by_now, 1), round(projected_end_qty, 1), round(projected_deficit, 1))
+    return (expected_by_now, projected_end_qty, projected_deficit)
 
 
 def assign_color(projected_deficit: float, red_threshold: int) -> str:
