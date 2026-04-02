@@ -171,6 +171,12 @@ def build_dashboard_data(
     rows: List[MonitorRow] = []
     today = date.today()
 
+    # Log primi snapshot per debug
+    for i, (key, snap) in enumerate(snapshot_agg.items()):
+        if i < 5:
+            logger.info("  snapshot: order='%s' id_phase=%d phase='%s'",
+                        snap.order_number, snap.id_phase, snap.phase_name)
+
     for key, snap in snapshot_agg.items():
         order_in_plan = snap.order_number in plan_orders
 
@@ -182,6 +188,7 @@ def build_dashboard_data(
                 plan_key = (snap.order_number, snap.id_phase)
                 if plan_key not in resolved_plan:
                     # Fase non nel piano Excel per questo ordine -> IGNORA
+                    logger.debug("  skip: order='%s' phase=%d non in resolved_plan", snap.order_number, snap.id_phase)
                     continue
                 planned_qty = resolved_plan[plan_key].planned_qty
             else:

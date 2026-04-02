@@ -48,7 +48,16 @@ def resolve_order(conn, order_number: str) -> Optional[Tuple[int, str]]:
 
 
 def resolve_phase(conn, machine_name: str) -> Optional[int]:
-    """Risolve IdPhase per un nome macchina."""
+    """
+    Risolve IdPhase per un nome macchina.
+    Strategia a 3 livelli:
+    1. Cerca via TraceabilityPlanning_RS (Machine -> Phase -> traceability_rs.Phases)
+    2. Cerca direttamente in traceability_rs.dbo.Phases per PhaseName esatto
+    3. Cerca in traceability_rs.dbo.Phases con LIKE (match parziale)
+    """
+    name = machine_name.strip()
+
+    # 1. Percorso originale via TraceabilityPlanning_RS
     try:
         cursor = conn.cursor()
         cursor.execute("""
@@ -59,15 +68,47 @@ def resolve_phase(conn, machine_name: str) -> Optional[int]:
             LEFT JOIN traceability_rs.dbo.phases p
                 ON [TraceabilityPlanning_RS].[dbo].[phase].PhaseName COLLATE DATABASE_DEFAULT = p.PhaseName
             WHERE Machine.MachineName = ?
-        """, machine_name)
+        """, name)
         row = cursor.fetchone()
         cursor.close()
         if row and row[0] is not None:
             return row[0]
-        return None
     except Exception as e:
-        logger.error("Errore resolve_phase per '%s': %s", machine_name, e)
-        return None
+        logger.warning("resolve_phase via Planning fallito per '%s': %s", name, e)
+
+    # 2. Fallback: cerca direttamente in traceability_rs.dbo.Phases per nome esatto
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT IdPhase FROM traceability_rs.dbo.Phases
+            WHERE PhaseName = ?
+        """, name)
+        row = cursor.fetchone()
+        cursor.close()
+        if row and row[0] is not None:
+            logger.info("resolve_phase fallback diretto OK per '%s' -> IdPhase=%d", name, row[0])
+            return row[0]
+    except Exception as e:
+        logger.warning("resolve_phase fallback diretto fallito per '%s': %s", name, e)
+
+    # 3. Fallback: LIKE match (es. nome macchina contiene il nome fase o viceversa)
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT IdPhase, PhaseName FROM traceability_rs.dbo.Phases
+            WHERE PhaseName LIKE ? OR ? LIKE '%' + PhaseName + '%'
+        """, f"%{name}%", name)
+        row = cursor.fetchone()
+        cursor.close()
+        if row and row[0] is not None:
+            logger.info("resolve_phase fallback LIKE OK per '%s' -> IdPhase=%d (PhaseName='%s')",
+                        name, row[0], row[1])
+            return row[0]
+    except Exception as e:
+        logger.warning("resolve_phase fallback LIKE fallito per '%s': %s", name, e)
+
+    logger.error("resolve_phase: NESSUN match per macchina '%s' in nessuna strategia", name)
+    return None
 
 
 def insert_snapshots(conn) -> int:

@@ -164,7 +164,9 @@ class CycleOrchestrator:
                 unresolved_count = 0
                 for pr in todays_plan:
                     if pr.machine_name not in phase_cache:
-                        phase_cache[pr.machine_name] = resolve_phase(conn, pr.machine_name)
+                        resolved_id = resolve_phase(conn, pr.machine_name)
+                        phase_cache[pr.machine_name] = resolved_id
+                        logger.info("  resolve_phase('%s') -> %s", pr.machine_name, resolved_id)
                     id_phase = phase_cache[pr.machine_name]
                     if id_phase is not None:
                         resolved_plan[(pr.order_number, id_phase)] = pr
@@ -176,7 +178,10 @@ class CycleOrchestrator:
                 logger.info("Piano odierno risolto: %d coppie ordine/fase, %d non risolte (su %d righe Excel)",
                             len(resolved_plan), unresolved_count, len(todays_plan))
 
-                # Se nessuna fase e' stata risolta, logga le macchine per debug
+                if len(resolved_plan) > 0:
+                    for rk in list(resolved_plan.keys())[:10]:
+                        logger.info("  resolved_plan key: order='%s' id_phase=%d", rk[0], rk[1])
+
                 if len(resolved_plan) == 0 and len(todays_plan) > 0:
                     unique_machines = set(pr.machine_name for pr in todays_plan)
                     logger.error("NESSUNA fase risolta! Macchine nel piano Excel: %s", unique_machines)
