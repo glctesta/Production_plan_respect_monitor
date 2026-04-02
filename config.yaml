@@ -1,0 +1,26 @@
+planning:
+  folder: "T:\\Planning"
+  sheet: "PlanningMachine"
+
+workday:
+  start: "07:30"
+  end: "23:30"
+
+polling:
+  interval_minutes: 10
+
+thresholds:
+  red_deficit: 10
+
+email:
+  enabled: true
+  settings_attribute: "sys_email_planning_warning"
+  yellow_cooldown_minutes: 120
+  red_cooldown_minutes: 60
+
+ui:
+  enable_blinking_alerts: true
+
+server:
+  host: "0.0.0.0"
+  port: 8085

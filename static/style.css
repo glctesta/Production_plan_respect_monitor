@@ -1,0 +1,366 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: #1a1a2e;
+    color: #e0e0e0;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.container {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 15px 20px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Header */
+header {
+    background: #16213e;
+    border-radius: 10px;
+    padding: 15px 25px;
+    margin-bottom: 15px;
+    border: 1px solid #0f3460;
+    flex-shrink: 0;
+}
+
+header h1 {
+    font-size: 22px;
+    color: #e94560;
+    margin-bottom: 8px;
+    letter-spacing: 1px;
+}
+
+.header-info {
+    display: flex;
+    align-items: center;
+    gap: 30px;
+    flex-wrap: wrap;
+}
+
+.header-info .info-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.header-info .label {
+    color: #8892b0;
+    font-size: 13px;
+}
+
+.header-info .info-group span:not(.label) {
+    color: #ccd6f6;
+    font-weight: 600;
+    font-size: 13px;
+}
+
+#btn-run-now {
+    background: #e94560;
+    color: white;
+    border: none;
+    padding: 8px 20px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 13px;
+    transition: background 0.2s;
+}
+
+#btn-run-now:hover {
+    background: #c73852;
+}
+
+#btn-run-now:disabled {
+    background: #555;
+    cursor: not-allowed;
+}
+
+#run-status {
+    font-size: 12px;
+    color: #64ffda;
+}
+
+/* Summary bar */
+.summary-bar {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+}
+
+.summary-item {
+    flex: 1;
+    min-width: 110px;
+    padding: 14px 16px;
+    border-radius: 10px;
+    text-align: center;
+    border: 2px solid transparent;
+}
+
+.summary-item .count {
+    display: block;
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.summary-item .label {
+    display: block;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-top: 3px;
+    opacity: 0.8;
+}
+
+.summary-item.total {
+    background: #16213e;
+    border-color: #0f3460;
+    color: #ccd6f6;
+}
+
+.summary-item.green {
+    background: #0d3320;
+    border-color: #27ae60;
+    color: #2ecc71;
+}
+
+.summary-item.yellow {
+    background: #3d3010;
+    border-color: #f39c12;
+    color: #f1c40f;
+}
+
+.summary-item.red {
+    background: #3d1010;
+    border-color: #e74c3c;
+    color: #e74c3c;
+}
+
+.summary-item.out-of-plan {
+    background: #3d0a1e;
+    border-color: #e94560;
+    color: #e94560;
+}
+
+/* Error banner */
+.error-banner {
+    background: #3d1010;
+    border: 1px solid #e74c3c;
+    color: #e74c3c;
+    padding: 10px 20px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+/* Table wrapper - fills remaining space */
+.table-wrapper {
+    flex: 1;
+    overflow: hidden;
+    background: #16213e;
+    border-radius: 10px;
+    position: relative;
+}
+
+/* Table */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    table-layout: fixed;
+}
+
+thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+thead tr {
+    background: #0f3460;
+}
+
+th {
+    padding: 12px 14px;
+    text-align: left;
+    color: #8892b0;
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-bottom: 2px solid #1a1a2e;
+}
+
+td {
+    padding: 10px 14px;
+    border-bottom: 1px solid #1a1a2e;
+    vertical-align: middle;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+tbody tr {
+    transition: background 0.15s;
+}
+
+tbody tr:hover {
+    background: #1e2d4a;
+}
+
+.empty-msg {
+    text-align: center;
+    color: #555;
+    padding: 40px;
+    font-size: 16px;
+}
+
+/* Status dot */
+.dot {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    margin-right: 8px;
+    vertical-align: middle;
+}
+
+.dot-green { background: #2ecc71; box-shadow: 0 0 6px #2ecc71; }
+.dot-yellow { background: #f1c40f; box-shadow: 0 0 6px #f1c40f; }
+.dot-red { background: #e74c3c; box-shadow: 0 0 6px #e74c3c; }
+
+/* Stars */
+.star {
+    font-size: 18px;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+
+.star-yellow {
+    color: #f1c40f;
+    text-shadow: 0 0 4px #f1c40f;
+}
+
+.star-blue {
+    color: #3498db;
+    text-shadow: 0 0 4px #3498db;
+}
+
+/* Out-of-plan row */
+.row-out-of-plan {
+    background: #5a0a0a !important;
+    font-weight: 700;
+    color: #ff6b6b;
+}
+
+.row-out-of-plan td {
+    border-bottom-color: #7a1a1a;
+}
+
+/* Row colors */
+.row-red {
+    background: #2d1010;
+}
+
+.row-yellow {
+    background: #2d2a10;
+}
+
+.row-green {
+    background: #102d1a;
+}
+
+/* Blink animation */
+@keyframes blink-row {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+.blink {
+    animation: blink-row 1.2s ease-in-out infinite;
+}
+
+/* Qty Done cell */
+.qty-cell {
+    display: flex;
+    align-items: center;
+}
+
+/* Legend bar */
+.legend-bar {
+    display: flex;
+    gap: 25px;
+    padding: 8px 15px;
+    flex-shrink: 0;
+    font-size: 12px;
+    color: #8892b0;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Mapping errors */
+.mapping-errors {
+    margin-top: 10px;
+    background: #16213e;
+    border-radius: 10px;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.mapping-errors h3 {
+    padding: 12px 20px;
+    cursor: pointer;
+    color: #8892b0;
+    font-size: 14px;
+    user-select: none;
+    border-bottom: 1px solid #0f3460;
+}
+
+.mapping-errors h3:hover {
+    color: #ccd6f6;
+}
+
+.error-list {
+    padding: 10px 20px;
+    max-height: 150px;
+    overflow-y: auto;
+    font-size: 13px;
+    color: #e74c3c;
+}
+
+.error-list p {
+    padding: 4px 0;
+    border-bottom: 1px solid #1a1a2e;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+    .summary-bar {
+        flex-direction: column;
+    }
+    .header-info {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    table {
+        font-size: 12px;
+    }
+    th, td {
+        padding: 8px 10px;
+    }
+}

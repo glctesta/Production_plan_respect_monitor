@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+logs/
+*.log
+.claude/
+PlanRespect_deploy.zip

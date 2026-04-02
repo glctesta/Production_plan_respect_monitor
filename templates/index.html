@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Production Plan Monitor</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Production Plan Monitor</h1>
+            <div class="header-info">
+                <div class="info-group">
+                    <span class="label">Excel file:</span>
+                    <span id="excel-file">-</span>
+                </div>
+                <div class="info-group">
+                    <span class="label">Last update:</span>
+                    <span id="last-update">-</span>
+                </div>
+                <div class="info-group">
+                    <button id="btn-run-now" onclick="runNow()">Run Now</button>
+                    <span id="run-status"></span>
+                </div>
+            </div>
+        </header>
+
+        <div class="summary-bar">
+            <div class="summary-item total">
+                <span class="count" id="count-total">0</span>
+                <span class="label">Total</span>
+            </div>
+            <div class="summary-item green">
+                <span class="count" id="count-green">0</span>
+                <span class="label">On Track</span>
+            </div>
+            <div class="summary-item yellow">
+                <span class="count" id="count-yellow">0</span>
+                <span class="label">Warning</span>
+            </div>
+            <div class="summary-item red">
+                <span class="count" id="count-red">0</span>
+                <span class="label">Critical</span>
+            </div>
+            <div class="summary-item out-of-plan">
+                <span class="count" id="count-oop">0</span>
+                <span class="label">Out of Plan</span>
+            </div>
+        </div>
+
+        <div id="error-banner" class="error-banner" style="display:none;"></div>
+
+        <div class="table-wrapper" id="table-wrapper">
+            <table id="monitor-table">
+                <thead>
+                    <tr>
+                        <th>Order Number</th>
+                        <th>Product Code</th>
+                        <th>Phase</th>
+                        <th>Planning QTY/Day</th>
+                        <th>Qty Done</th>
+                        <th>Expected Now</th>
+                        <th>Projected End</th>
+                        <th>Deficit</th>
+                    </tr>
+                </thead>
+                <tbody id="table-body">
+                    <tr><td colspan="8" class="empty-msg">Waiting for first cycle...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="legend-bar">
+            <span class="legend-item"><span class="star star-yellow">&#9733;</span> Scheduled in upcoming days</span>
+            <span class="legend-item"><span class="star star-blue">&#9733;</span> Delayed from previous days</span>
+        </div>
+
+        <div id="mapping-errors" class="mapping-errors" style="display:none;">
+            <h3 onclick="toggleErrors()">Mapping Errors <span id="error-toggle">&#9660;</span></h3>
+            <div id="error-list" class="error-list"></div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
