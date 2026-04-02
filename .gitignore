@@ -4,3 +4,7 @@ logs/
 *.log
 .claude/
 PlanRespect_deploy.zip
+node_modules/
+package.json
+package-lock.json
+generate_guide.js
