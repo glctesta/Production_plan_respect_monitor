@@ -158,9 +158,10 @@ class CycleOrchestrator:
                 conn = db_conn.connect()
 
                 # 4. Risolvi fasi Excel -> id_phase dal DB
-                #    Costruisce mappa (order_number, id_phase) -> planned_qty
+                #    Costruisce mappa (order_number, id_phase) -> PlanRow
                 resolved_plan = {}  # {(order_number, id_phase): PlanRow}
                 phase_cache = {}    # {machine_name: id_phase}
+                unresolved_count = 0
                 for pr in todays_plan:
                     if pr.machine_name not in phase_cache:
                         phase_cache[pr.machine_name] = resolve_phase(conn, pr.machine_name)
@@ -168,11 +169,17 @@ class CycleOrchestrator:
                     if id_phase is not None:
                         resolved_plan[(pr.order_number, id_phase)] = pr
                     else:
+                        unresolved_count += 1
                         logger.warning("Fase non risolta per macchina '%s' (ordine %s)",
                                        pr.machine_name, pr.order_number)
 
-                logger.info("Piano odierno risolto: %d coppie ordine/fase (su %d righe Excel)",
-                            len(resolved_plan), len(todays_plan))
+                logger.info("Piano odierno risolto: %d coppie ordine/fase, %d non risolte (su %d righe Excel)",
+                            len(resolved_plan), unresolved_count, len(todays_plan))
+
+                # Se nessuna fase e' stata risolta, logga le macchine per debug
+                if len(resolved_plan) == 0 and len(todays_plan) > 0:
+                    unique_machines = set(pr.machine_name for pr in todays_plan)
+                    logger.error("NESSUNA fase risolta! Macchine nel piano Excel: %s", unique_machines)
 
                 # 5. Inserisci snapshot
                 try:

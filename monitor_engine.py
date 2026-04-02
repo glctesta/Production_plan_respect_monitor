@@ -153,6 +153,14 @@ def build_dashboard_data(
     plan_orders: set = set(pr.order_number for pr in todays_plan)
     mapping_errors: List[dict] = []
 
+    # Indice per fallback: per ordine -> lista PlanRow
+    plan_by_order: Dict[str, List[PlanRow]] = {}
+    for pr in todays_plan:
+        plan_by_order.setdefault(pr.order_number, []).append(pr)
+
+    # Flag: se resolved_plan ha dati, usa matching esatto; altrimenti fallback
+    use_resolved = len(resolved_plan) > 0
+
     # Aggrega snapshot per (id_order, id_phase) prendendo il piu recente
     snapshot_agg: Dict[Tuple[int, int], SnapshotRow] = {}
     for s in snapshots:
@@ -167,14 +175,29 @@ def build_dashboard_data(
         order_in_plan = snap.order_number in plan_orders
 
         if order_in_plan:
-            # Cerca match esatto (order_number, id_phase) nel piano risolto
-            plan_key = (snap.order_number, snap.id_phase)
-            if plan_key not in resolved_plan:
-                # Ordine nel piano ma QUESTA FASE non e' nel piano Excel -> IGNORA
-                continue
+            planned_qty = 0
 
-            pr = resolved_plan[plan_key]
-            planned_qty = pr.planned_qty
+            if use_resolved:
+                # Matching esatto per (order_number, id_phase)
+                plan_key = (snap.order_number, snap.id_phase)
+                if plan_key not in resolved_plan:
+                    # Fase non nel piano Excel per questo ordine -> IGNORA
+                    continue
+                planned_qty = resolved_plan[plan_key].planned_qty
+            else:
+                # Fallback: matching per ordine (fase non risolta)
+                plan_entries = plan_by_order.get(snap.order_number, [])
+                if plan_entries:
+                    # Cerca match per nome fase/macchina
+                    matched = False
+                    for pe in plan_entries:
+                        if pe.machine_name.lower() in snap.phase_name.lower() or \
+                           snap.phase_name.lower() in pe.machine_name.lower():
+                            planned_qty = pe.planned_qty
+                            matched = True
+                            break
+                    if not matched:
+                        planned_qty = plan_entries[0].planned_qty
 
             expected, projected, deficit = compute_projection(
                 qty_done=snap.qty_processed,
