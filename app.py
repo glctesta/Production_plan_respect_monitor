@@ -6,7 +6,6 @@ from datetime import datetime
 import threading
 import time
 
-import uvicorn
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from app_config import load_config
@@ -25,7 +24,6 @@ def setup_logging():
     logger = logging.getLogger("PlanMonitor")
     logger.setLevel(logging.INFO)
 
-    # Evita duplicazione handler se chiamato piu volte
     if logger.handlers:
         return logger
 
@@ -34,13 +32,11 @@ def setup_logging():
         datefmt="%Y-%m-%d %H:%M:%S"
     )
 
-    # Console handler
     console = logging.StreamHandler(sys.stdout)
     console.setLevel(logging.INFO)
     console.setFormatter(formatter)
     logger.addHandler(console)
 
-    # File handler rotativo (10MB, 5 backup)
     file_handler = RotatingFileHandler(
         log_file, maxBytes=10 * 1024 * 1024, backupCount=5, encoding="utf-8"
     )
@@ -52,13 +48,11 @@ def setup_logging():
 
 
 def main():
-    # Setup
     logger = setup_logging()
     logger.info("=" * 60)
     logger.info("Production Plan Monitor - Avvio")
     logger.info("=" * 60)
 
-    # Carica configurazione
     config = load_config()
     logger.info("Configurazione caricata: polling=%d min, orario=%s-%s, porta=%d",
                 config.polling.interval_minutes,
@@ -66,11 +60,9 @@ def main():
                 config.workday.end.strftime("%H:%M"),
                 config.server.port)
 
-    # Crea componenti
     email_alerter = EmailAlertManager(config)
     orchestrator = CycleOrchestrator(config, email_alerter)
 
-    # Crea app FastAPI
     app = create_app(config, orchestrator)
 
     # Setup APScheduler
@@ -87,22 +79,23 @@ def main():
     scheduler.start()
     logger.info("Scheduler avviato: ciclo ogni %d minuti", config.polling.interval_minutes)
 
-    # Esegui primo ciclo subito in background
+    # Primo ciclo in background
     def _initial_cycle():
-        time.sleep(3)  # Attendi avvio server
+        time.sleep(3)
         logger.info("Esecuzione primo ciclo iniziale...")
         orchestrator.run_cycle(force=True)
 
     t = threading.Thread(target=_initial_cycle, daemon=True)
     t.start()
 
-    # Avvia server
+    # Avvia Flask
     try:
-        uvicorn.run(
-            app,
+        logger.info("Server Flask avviato su http://%s:%d", config.server.host, config.server.port)
+        app.run(
             host=config.server.host,
             port=config.server.port,
-            log_level="warning"
+            debug=False,
+            use_reloader=False
         )
     finally:
         scheduler.shutdown(wait=False)
