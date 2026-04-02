@@ -44,6 +44,20 @@ header h1 {
     letter-spacing: 1px;
 }
 
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.live-clock {
+    font-size: 22px;
+    font-weight: 700;
+    color: #64ffda;
+    font-family: 'Consolas', 'Courier New', monospace;
+    letter-spacing: 2px;
+}
+
 .header-logo {
     height: 45px;
     width: auto;

@@ -6,7 +6,7 @@ from typing import Optional, List
 
 from app_config import AppConfig
 from excel_parser import find_latest_excel, parse_last_phase, get_todays_plan, PlanRow
-from db_queries import get_db_connection, insert_snapshots, read_unchecked_snapshots, mark_checked
+from db_queries import get_db_connection, insert_snapshots, read_unchecked_snapshots, mark_checked, resolve_phase
 from monitor_engine import build_dashboard_data, compute_summary, MonitorRow
 from email_alerter import EmailAlertManager
 
@@ -157,20 +157,38 @@ class CycleOrchestrator:
             try:
                 conn = db_conn.connect()
 
-                # 4. Inserisci snapshot
+                # 4. Risolvi fasi Excel -> id_phase dal DB
+                #    Costruisce mappa (order_number, id_phase) -> planned_qty
+                resolved_plan = {}  # {(order_number, id_phase): PlanRow}
+                phase_cache = {}    # {machine_name: id_phase}
+                for pr in todays_plan:
+                    if pr.machine_name not in phase_cache:
+                        phase_cache[pr.machine_name] = resolve_phase(conn, pr.machine_name)
+                    id_phase = phase_cache[pr.machine_name]
+                    if id_phase is not None:
+                        resolved_plan[(pr.order_number, id_phase)] = pr
+                    else:
+                        logger.warning("Fase non risolta per macchina '%s' (ordine %s)",
+                                       pr.machine_name, pr.order_number)
+
+                logger.info("Piano odierno risolto: %d coppie ordine/fase (su %d righe Excel)",
+                            len(resolved_plan), len(todays_plan))
+
+                # 5. Inserisci snapshot
                 try:
                     snap_count = insert_snapshots(conn)
                     logger.info("Snapshot inseriti: %d", snap_count)
                 except Exception as e:
                     logger.error("Errore inserimento snapshot: %s", e)
 
-                # 5. Leggi snapshot non controllati
+                # 6. Leggi snapshot non controllati
                 snapshots = read_unchecked_snapshots(conn)
 
-                # 6. Costruisci dati dashboard (passa all_plan e conn per contesto storico)
+                # 7. Costruisci dati dashboard (usa resolved_plan per filtrare solo fasi Excel)
                 rows, mapping_errors = build_dashboard_data(
                     snapshots, todays_plan, self.config,
-                    all_plan=all_plan, conn=conn
+                    all_plan=all_plan, conn=conn,
+                    resolved_plan=resolved_plan
                 )
                 summary = compute_summary(rows)
 

@@ -235,8 +235,19 @@ function toggleErrors() {
     }
 }
 
+// Live clock
+function updateClock() {
+    const now = new Date();
+    const h = String(now.getHours()).padStart(2, '0');
+    const m = String(now.getMinutes()).padStart(2, '0');
+    const s = String(now.getSeconds()).padStart(2, '0');
+    document.getElementById('live-clock').textContent = `${h}:${m}:${s}`;
+}
+
 // Init
 document.addEventListener('DOMContentLoaded', () => {
     fetchStatus();
     pollTimer = setInterval(fetchStatus, 15000);
+    updateClock();
+    setInterval(updateClock, 1000);
 });

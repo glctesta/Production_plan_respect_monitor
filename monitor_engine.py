@@ -135,24 +135,23 @@ def build_dashboard_data(
     todays_plan: List[PlanRow],
     config: AppConfig,
     all_plan: List[PlanRow] = None,
-    conn=None
+    conn=None,
+    resolved_plan: Dict[Tuple[str, int], 'PlanRow'] = None
 ) -> Tuple[List[MonitorRow], List[dict]]:
     """
     Costruisce i dati della dashboard confrontando snapshot con piano.
-    all_plan: piano completo (tutte le date) per cercare contesto storico/futuro.
-    conn: connessione DB per verificare produzione passata.
-    Ritorna (monitor_rows, mapping_errors).
+    resolved_plan: {(order_number, id_phase): PlanRow} - piano risolto con fasi DB.
+    Solo le combinazioni ordine/fase presenti nel piano Excel vengono mostrate.
+    Ordini non nel piano vengono mostrati come out-of-plan.
     """
     if all_plan is None:
         all_plan = []
+    if resolved_plan is None:
+        resolved_plan = {}
 
-    plan_orders: set = set()
+    # Set di ordini presenti nel piano odierno
+    plan_orders: set = set(pr.order_number for pr in todays_plan)
     mapping_errors: List[dict] = []
-
-    plan_by_order: Dict[str, List[PlanRow]] = {}
-    for pr in todays_plan:
-        plan_orders.add(pr.order_number)
-        plan_by_order.setdefault(pr.order_number, []).append(pr)
 
     # Aggrega snapshot per (id_order, id_phase) prendendo il piu recente
     snapshot_agg: Dict[Tuple[int, int], SnapshotRow] = {}
@@ -168,24 +167,14 @@ def build_dashboard_data(
         order_in_plan = snap.order_number in plan_orders
 
         if order_in_plan:
-            plan_entries = plan_by_order.get(snap.order_number, [])
-            planned_qty = 0
-            matched = False
-            for pe in plan_entries:
-                planned_qty = pe.planned_qty
-                matched = True
-                break
+            # Cerca match esatto (order_number, id_phase) nel piano risolto
+            plan_key = (snap.order_number, snap.id_phase)
+            if plan_key not in resolved_plan:
+                # Ordine nel piano ma QUESTA FASE non e' nel piano Excel -> IGNORA
+                continue
 
-            if len(plan_entries) > 1:
-                for pe in plan_entries:
-                    if pe.machine_name.lower() in snap.phase_name.lower() or \
-                       snap.phase_name.lower() in pe.machine_name.lower():
-                        planned_qty = pe.planned_qty
-                        matched = True
-                        break
-
-            if not matched:
-                planned_qty = 0
+            pr = resolved_plan[plan_key]
+            planned_qty = pr.planned_qty
 
             expected, projected, deficit = compute_projection(
                 qty_done=snap.qty_processed,
@@ -247,8 +236,9 @@ def build_dashboard_data(
         r.phase_order
     ))
 
-    logger.info("Dashboard: %d righe totali, %d fuori piano",
-                len(rows), sum(1 for r in rows if r.is_out_of_plan))
+    logger.info("Dashboard: %d righe mostrate (solo fasi da Excel), %d fuori piano, %d snapshot totali ignorati",
+                len(rows), sum(1 for r in rows if r.is_out_of_plan),
+                len(snapshot_agg) - len(rows))
 
     return rows, mapping_errors
 
