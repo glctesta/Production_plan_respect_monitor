@@ -31,11 +31,23 @@ header {
     flex-shrink: 0;
 }
 
+.header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
 header h1 {
     font-size: 22px;
     color: #e94560;
-    margin-bottom: 8px;
     letter-spacing: 1px;
+}
+
+.header-logo {
+    height: 45px;
+    width: auto;
+    object-fit: contain;
 }
 
 .header-info {
