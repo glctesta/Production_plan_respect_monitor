@@ -18,6 +18,7 @@ class SnapshotRow:
     order_number: str
     product_code: str
     phase_name: str
+    phase_order: int = 0
 
 
 def get_db_connection() -> DatabaseConnection:
@@ -121,7 +122,8 @@ def read_unchecked_snapshots(conn) -> List[SnapshotRow]:
             SELECT s.IdOrder, s.IdPhase, s.QtyProcessed, s.SnapShotTime,
                    o.OrderNumber,
                    p2.ProductCode,
-                   ph.PhaseName
+                   ph.PhaseName,
+                   ISNULL(ph.PhaseOrder, 999)
             FROM traceability_rs.dbo.ShapShots s
             INNER JOIN traceability_rs.dbo.Orders o ON s.IdOrder = o.IdOrder
             INNER JOIN traceability_rs.dbo.Products p2 ON o.IDProduct = p2.IDProduct
@@ -137,7 +139,8 @@ def read_unchecked_snapshots(conn) -> List[SnapshotRow]:
                 snapshot_time=row[3],
                 order_number=str(row[4]).strip(),
                 product_code=str(row[5]).strip() if row[5] else "",
-                phase_name=str(row[6]).strip() if row[6] else ""
+                phase_name=str(row[6]).strip() if row[6] else "",
+                phase_order=row[7] if row[7] is not None else 999
             ))
         cursor.close()
         logger.info("Snapshot non controllati letti: %d", len(rows))

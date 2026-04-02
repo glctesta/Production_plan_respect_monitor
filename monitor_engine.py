@@ -27,6 +27,7 @@ class MonitorRow:
     status_color: str       # "green", "yellow", "red"
     in_excel_plan: bool
     is_out_of_plan: bool
+    phase_order: int = 0          # Ordinamento fase da PhaseOrder
     context_star: str = ""        # "" = none, "yellow" = future, "blue" = delay
     context_note: str = ""        # Descrizione per tooltip/email
 
@@ -211,7 +212,8 @@ def build_dashboard_data(
                 projected_deficit=deficit,
                 status_color=color,
                 in_excel_plan=True,
-                is_out_of_plan=False
+                is_out_of_plan=False,
+                phase_order=snap.phase_order
             ))
         else:
             # Ordine fuori piano Excel - cerca contesto storico/futuro
@@ -233,18 +235,16 @@ def build_dashboard_data(
                 status_color="red",
                 in_excel_plan=False,
                 is_out_of_plan=True,
+                phase_order=snap.phase_order,
                 context_star=context_star,
                 context_note=context_note
             ))
 
-    # Ordinamento: fuori piano prima, poi rosso, giallo, verde
-    color_order = {"red": 0, "yellow": 1, "green": 2}
+    # Ordinamento: fuori piano prima, poi per ordine, poi per phase_order
     rows.sort(key=lambda r: (
         0 if r.is_out_of_plan else 1,
-        color_order.get(r.status_color, 3),
-        r.phase,
         r.order_number,
-        -r.projected_deficit
+        r.phase_order
     ))
 
     logger.info("Dashboard: %d righe totali, %d fuori piano",
