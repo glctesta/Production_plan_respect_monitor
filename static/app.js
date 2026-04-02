@@ -2,6 +2,9 @@ let pollTimer = null;
 let scrollTimer = null;
 let currentScrollRow = 0;
 let totalRows = 0;
+let manualScrollMode = false;
+let inactivityTimer = null;
+const INACTIVITY_TIMEOUT = 25 * 60 * 1000; // 25 minuti in ms
 
 async function fetchStatus() {
     try {
@@ -108,8 +111,10 @@ function renderDashboard(data) {
     }
     tbody.innerHTML = html;
 
-    // Start or restart auto-scroll
-    setupAutoScroll();
+    // Auto-scroll solo se NON in modalita manuale
+    if (!manualScrollMode) {
+        setupAutoScroll();
+    }
 
     // Mapping errors
     const errSection = document.getElementById('mapping-errors');
@@ -123,12 +128,83 @@ function renderDashboard(data) {
     }
 }
 
-// --- Auto-scroll logic ---
-function setupAutoScroll() {
-    const wrapper = document.getElementById('table-wrapper');
-    const tbody = document.getElementById('table-body');
+// ===================== SCROLL MODE MANAGEMENT =====================
 
-    // Check if content overflows
+function toggleScrollMode() {
+    if (manualScrollMode) {
+        // Torna ad auto-scroll
+        enableAutoScroll();
+    } else {
+        // Passa a scroll manuale
+        enableManualScroll();
+    }
+}
+
+function enableManualScroll() {
+    manualScrollMode = true;
+    stopAutoScroll();
+
+    const wrapper = document.getElementById('table-wrapper');
+    wrapper.style.overflowY = 'auto';
+
+    updateScrollButton();
+    resetInactivityTimer();
+}
+
+function enableAutoScroll() {
+    manualScrollMode = false;
+    clearInactivityTimer();
+
+    const wrapper = document.getElementById('table-wrapper');
+    wrapper.style.overflowY = 'hidden';
+
+    setupAutoScroll();
+    updateScrollButton();
+}
+
+function updateScrollButton() {
+    const btn = document.getElementById('btn-scroll-mode');
+    if (manualScrollMode) {
+        btn.textContent = 'Auto Scroll';
+        btn.classList.add('manual-active');
+    } else {
+        btn.textContent = 'Manual Scroll';
+        btn.classList.remove('manual-active');
+    }
+}
+
+// ===================== INACTIVITY TIMER (25 min) =====================
+
+function resetInactivityTimer() {
+    clearInactivityTimer();
+    if (manualScrollMode) {
+        inactivityTimer = setTimeout(() => {
+            enableAutoScroll();
+        }, INACTIVITY_TIMEOUT);
+    }
+}
+
+function clearInactivityTimer() {
+    if (inactivityTimer) {
+        clearTimeout(inactivityTimer);
+        inactivityTimer = null;
+    }
+}
+
+function onUserActivity() {
+    if (manualScrollMode) {
+        resetInactivityTimer();
+    }
+}
+
+// ===================== AUTO-SCROLL LOGIC =====================
+
+function setupAutoScroll() {
+    if (manualScrollMode) return;
+
+    const wrapper = document.getElementById('table-wrapper');
+    wrapper.style.overflowY = 'hidden';
+
     if (wrapper.scrollHeight <= wrapper.clientHeight) {
         stopAutoScroll();
         return;
@@ -142,6 +218,8 @@ function setupAutoScroll() {
 }
 
 function scrollOneRow() {
+    if (manualScrollMode) return;
+
     const wrapper = document.getElementById('table-wrapper');
     const tbody = document.getElementById('table-body');
     const rows = tbody.querySelectorAll('tr');
@@ -150,14 +228,12 @@ function scrollOneRow() {
 
     currentScrollRow++;
 
-    // If we've scrolled past the end, reset to top
     if (currentScrollRow >= rows.length) {
         currentScrollRow = 0;
         wrapper.scrollTo({ top: 0, behavior: 'smooth' });
         return;
     }
 
-    // Scroll so that currentScrollRow is at top of visible area (below sticky header)
     const targetRow = rows[currentScrollRow];
     if (targetRow) {
         const rowTop = targetRow.offsetTop;
@@ -173,21 +249,7 @@ function stopAutoScroll() {
     currentScrollRow = 0;
 }
 
-// Pause auto-scroll on hover, resume on leave
-document.addEventListener('DOMContentLoaded', () => {
-    const wrapper = document.getElementById('table-wrapper');
-    wrapper.addEventListener('mouseenter', () => {
-        if (scrollTimer) {
-            clearInterval(scrollTimer);
-            scrollTimer = null;
-        }
-    });
-    wrapper.addEventListener('mouseleave', () => {
-        if (totalRows > 0 && wrapper.scrollHeight > wrapper.clientHeight) {
-            scrollTimer = setInterval(scrollOneRow, 5000);
-        }
-    });
-});
+// ===================== UTILITIES =====================
 
 function escHtml(str) {
     if (!str) return '';
@@ -244,10 +306,18 @@ function updateClock() {
     document.getElementById('live-clock').textContent = `${h}:${m}:${s}`;
 }
 
-// Init
+// ===================== INIT =====================
+
 document.addEventListener('DOMContentLoaded', () => {
     fetchStatus();
     pollTimer = setInterval(fetchStatus, 15000);
     updateClock();
     setInterval(updateClock, 1000);
+
+    // Mouse activity tracker per inactivity timeout
+    document.addEventListener('mousemove', onUserActivity);
+    document.addEventListener('mousedown', onUserActivity);
+    document.addEventListener('wheel', onUserActivity);
+
+    updateScrollButton();
 });
