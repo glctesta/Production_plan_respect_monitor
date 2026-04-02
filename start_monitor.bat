@@ -72,6 +72,8 @@ if %ERRORLEVEL% neq 0 (
     pause
     exit /b 1
 )
+:: Fix per Python 3.12.0: reinstalla markupsafe senza estensioni C
+"%PYTHON%" -m pip install --force-reinstall --no-binary markupsafe markupsafe --quiet 2>nul
 echo Dipendenze OK.
 echo.
 
