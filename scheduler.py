@@ -6,7 +6,9 @@ from typing import Optional, List
 
 from app_config import AppConfig
 from excel_parser import find_latest_excel, parse_last_phase, get_todays_plan, PlanRow
-from db_queries import get_db_connection, insert_snapshots, read_unchecked_snapshots, mark_checked, resolve_phase, resolve_order, get_qty_missing
+from db_queries import (get_db_connection, insert_snapshots, read_unchecked_snapshots,
+                        mark_checked, resolve_phase, resolve_order, get_qty_missing,
+                        create_plan_alert_tables, insert_plan_alerts)
 from monitor_engine import build_dashboard_data, compute_summary, MonitorRow
 from email_alerter import EmailAlertManager
 
@@ -22,6 +24,8 @@ class CycleOrchestrator:
         self.email_alerter = email_alerter
         self._lock = threading.Lock()
         self._cycle_running = False
+
+        self._tables_created: bool = False
 
         # Cache Excel
         self._cached_excel_path: Optional[str] = None
@@ -241,6 +245,25 @@ class CycleOrchestrator:
                         self.email_alerter.send_alerts(conn, rows, summary, excel_file)
                 except Exception as e:
                     logger.error("Errore invio email alert: %s", e)
+
+                # 8b. Email aggiustamento quantita' (1x/giorno)
+                try:
+                    adjusted_rows = [r for r in rows if r.qty_adjusted]
+                    if adjusted_rows and self.config.email.enabled:
+                        self.email_alerter.send_qty_adjustment_email(conn, adjusted_rows, excel_file)
+                except Exception as e:
+                    logger.error("Errore invio email aggiustamento qty: %s", e)
+
+                # 8c. Crea tabelle PlanAlerts se necessario e salva alert
+                try:
+                    if not self._tables_created:
+                        create_plan_alert_tables(conn)
+                        self._tables_created = True
+                    alert_rows = [r for r in rows if r.status_color == "red" or r.is_out_of_plan]
+                    if alert_rows:
+                        insert_plan_alerts(conn, alert_rows)
+                except Exception as e:
+                    logger.error("Errore salvataggio PlanAlerts: %s", e)
 
                 # 9. Marca snapshot come controllati
                 try:

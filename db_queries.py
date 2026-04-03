@@ -283,3 +283,102 @@ def mark_checked(conn, id_orders_phases: List[Tuple[int, int]]) -> None:
         logger.info("Snapshot marcati come controllati: %d coppie ordine/fase", len(id_orders_phases))
     except Exception as e:
         logger.error("Errore aggiornamento IsChecked: %s", e)
+
+
+def create_plan_alert_tables(conn) -> None:
+    """
+    Crea le tabelle PlanAlerts e PlanAlertResponses se non esistono.
+    Chiamata una volta all'avvio dell'applicazione.
+    """
+    try:
+        cursor = conn.cursor()
+        # Tabella PlanAlerts
+        cursor.execute("""
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'PlanAlerts'
+                          AND schema_id = SCHEMA_ID('dbo'))
+            CREATE TABLE traceability_rs.dbo.PlanAlerts (
+                AlertId         INT IDENTITY(1,1) PRIMARY KEY,
+                IdOrder         INT NOT NULL,
+                ProductName     NVARCHAR(100),
+                PhaseName       NVARCHAR(100),
+                QtyInXls        INT,
+                QtyProduced     INT,
+                QtyExpected     INT,
+                ProjectedEnd    INT,
+                Deficit         INT,
+                StatusColor     NVARCHAR(20),
+                AlertDate       DATETIME DEFAULT GETDATE()
+            )
+        """)
+        # Tabella PlanAlertResponses
+        cursor.execute("""
+            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'PlanAlertResponses'
+                          AND schema_id = SCHEMA_ID('dbo'))
+            CREATE TABLE traceability_rs.dbo.PlanAlertResponses (
+                ResponseId      INT IDENTITY(1,1) PRIMARY KEY,
+                AlertId         INT NOT NULL FOREIGN KEY REFERENCES traceability_rs.dbo.PlanAlerts(AlertId),
+                OperatorName    NVARCHAR(100) NOT NULL,
+                Response        NVARCHAR(MAX) NOT NULL,
+                ResponseDate    DATETIME DEFAULT GETDATE()
+            )
+        """)
+        cursor.close()
+        logger.info("Tabelle PlanAlerts e PlanAlertResponses verificate/create")
+    except Exception as e:
+        logger.error("Errore creazione tabelle PlanAlerts: %s", e)
+
+
+def insert_plan_alerts(conn, rows) -> int:
+    """
+    Inserisce alert in PlanAlerts per righe rosse o out-of-plan.
+    rows: lista di MonitorRow.
+    Ritorna il numero di righe inserite.
+    """
+    inserted = 0
+    try:
+        cursor = conn.cursor()
+        for r in rows:
+            if r.status_color != "red" and not r.is_out_of_plan:
+                continue
+            cursor.execute("""
+                INSERT INTO traceability_rs.dbo.PlanAlerts
+                    (IdOrder, ProductName, PhaseName, QtyInXls, QtyProduced,
+                     QtyExpected, ProjectedEnd, Deficit, StatusColor)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+                r.id_order,
+                r.product_code,
+                r.phase,
+                r.planned_qty_day,
+                r.qty_done,
+                r.expected_by_now,
+                r.projected_end_qty,
+                r.projected_deficit,
+                "out_of_plan" if r.is_out_of_plan else r.status_color
+            )
+            inserted += 1
+        cursor.close()
+        logger.info("PlanAlerts inseriti: %d righe", inserted)
+        return inserted
+    except Exception as e:
+        logger.error("Errore inserimento PlanAlerts: %s", e)
+        return 0
+
+
+def insert_plan_alert_response(conn, alert_id: int, operator_name: str, response: str) -> bool:
+    """
+    Inserisce una risposta/giustificazione operatore per un alert specifico.
+    """
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO traceability_rs.dbo.PlanAlertResponses
+                (AlertId, OperatorName, Response)
+            VALUES (?, ?, ?)
+        """, alert_id, operator_name, response)
+        cursor.close()
+        logger.info("Risposta operatore inserita per AlertId=%d da '%s'", alert_id, operator_name)
+        return True
+    except Exception as e:
+        logger.error("Errore inserimento risposta operatore: %s", e)
+        return False

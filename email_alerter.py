@@ -1,4 +1,5 @@
 import logging
+import os
 from datetime import datetime, date
 from typing import List, Tuple, Optional
 
@@ -8,6 +9,9 @@ from utils import get_email_recipients, send_email
 
 logger = logging.getLogger("PlanMonitor")
 
+# Percorso logo per email inline
+LOGO_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "Logo.png")
+
 
 class EmailAlertManager:
     def __init__(self, config: AppConfig):
@@ -16,6 +20,7 @@ class EmailAlertManager:
         self._last_red_email: Optional[datetime] = None
         self._previous_red_count: int = 0
         self._today: Optional[date] = None
+        self._adjustment_email_sent_today: bool = False
 
     def _reset_if_new_day(self):
         today = date.today()
@@ -24,6 +29,7 @@ class EmailAlertManager:
             self._last_yellow_email = None
             self._last_red_email = None
             self._previous_red_count = 0
+            self._adjustment_email_sent_today = False
             logger.info("Email alert state reset per nuovo giorno: %s", today)
 
     def should_send_email(self, rows: List[MonitorRow]) -> Tuple[bool, int]:
@@ -239,4 +245,112 @@ class EmailAlertManager:
 
         except Exception as e:
             logger.error("Errore invio email alert: %s", e)
+            return False
+
+    def send_qty_adjustment_email(self, conn, adjusted_rows: List[MonitorRow],
+                                   excel_file: str) -> bool:
+        """
+        Invia email di notifica aggiustamento quantita' (1 volta al giorno).
+        adjusted_rows: lista di MonitorRow con qty_adjusted=True.
+        """
+        self._reset_if_new_day()
+
+        if self._adjustment_email_sent_today:
+            logger.info("Email aggiustamento qty gia' inviata oggi, skip")
+            return False
+
+        if not adjusted_rows:
+            return False
+
+        try:
+            recipients = get_email_recipients(conn, self.config.email.settings_attribute)
+            if not recipients:
+                logger.warning("Nessun destinatario per email aggiustamento qty")
+                return False
+
+            subject = "NOTICE: Planning Quantities Adjusted Based on Traceability Data"
+
+            # Costruisci righe tabella
+            table_rows = ""
+            for r in adjusted_rows:
+                table_rows += (
+                    f"<tr>"
+                    f"<td style='padding: 8px; border: 1px solid #ddd;'>{r.order_number}</td>"
+                    f"<td style='padding: 8px; border: 1px solid #ddd;'>{r.product_code}</td>"
+                    f"<td style='padding: 8px; border: 1px solid #ddd;'>{r.phase}</td>"
+                    f"<td style='padding: 8px; border: 1px solid #ddd; text-align: center;'>"
+                    f"{r.original_planned_qty}</td>"
+                    f"<td style='padding: 8px; border: 1px solid #ddd; text-align: center; "
+                    f"font-weight: bold; color: #e67e22;'>{r.planned_qty_day}</td>"
+                    f"<td style='padding: 8px; border: 1px solid #ddd; font-size: 12px; color: #666;'>"
+                    f"Traceability shows only {r.planned_qty_day} units remaining to complete "
+                    f"the order (Excel planned {r.original_planned_qty})</td>"
+                    f"</tr>"
+                )
+
+            body = f"""
+            <html>
+            <body style="font-family: Arial, sans-serif; color: #333;">
+                <div style="margin-bottom: 20px;">
+                    <img src="cid:company_logo" alt="Company Logo" width="150"/>
+                </div>
+
+                <h2 style="color: #2c3e50;">Planning Quantity Adjustment Notice</h2>
+
+                <p>The following production quantities have been <strong>automatically adjusted</strong>
+                because the Excel planning file contained quantities higher than what the traceability
+                system shows as still remaining to produce.</p>
+
+                <p>The planned daily quantities have been replaced with the actual remaining quantities
+                (QtyMissing) from the traceability database to ensure accurate production tracking.</p>
+
+                <p><strong>Source file:</strong> {excel_file}</p>
+                <p><strong>Date:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+
+                <table style="border-collapse: collapse; width: 100%; margin: 15px 0;">
+                    <thead>
+                        <tr style="background-color: #2c3e50; color: white;">
+                            <th style="padding: 10px; border: 1px solid #ddd;">Order</th>
+                            <th style="padding: 10px; border: 1px solid #ddd;">Product</th>
+                            <th style="padding: 10px; border: 1px solid #ddd;">Phase</th>
+                            <th style="padding: 10px; border: 1px solid #ddd;">Original Excel Qty</th>
+                            <th style="padding: 10px; border: 1px solid #ddd;">Adjusted Qty</th>
+                            <th style="padding: 10px; border: 1px solid #ddd;">Reason</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {table_rows}
+                    </tbody>
+                </table>
+
+                <hr style="margin: 20px 0;"/>
+                <p style="color: #666; font-size: 12px;">
+                    This is an automated notification from the Production Plan Monitoring System.<br/>
+                    The adjustments ensure that daily targets reflect actual remaining production needs.<br/>
+                    Do not reply to this email.
+                </p>
+            </body>
+            </html>
+            """
+
+            # Prepara allegati con logo inline
+            attachments = []
+            if os.path.exists(LOGO_PATH):
+                attachments.append(('inline', LOGO_PATH, 'company_logo'))
+
+            send_email(
+                recipients=recipients,
+                subject=subject,
+                body=body,
+                is_html=True,
+                attachments=attachments
+            )
+
+            self._adjustment_email_sent_today = True
+            logger.info("Email aggiustamento qty inviata: %d righe, %d destinatari",
+                        len(adjusted_rows), len(recipients))
+            return True
+
+        except Exception as e:
+            logger.error("Errore invio email aggiustamento qty: %s", e)
             return False

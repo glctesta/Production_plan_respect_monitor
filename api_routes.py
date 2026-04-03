@@ -46,6 +46,33 @@ def create_app(config: AppConfig, orchestrator: CycleOrchestrator) -> Flask:
             "blinking_enabled": config.ui.enable_blinking_alerts
         })
 
+    @app.route("/api/alert-response", methods=["POST"])
+    def api_alert_response():
+        """Endpoint per inserire risposte/giustificazioni operatori per un alert."""
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "JSON body required"}), 400
+
+        alert_id = data.get("alert_id")
+        operator_name = data.get("operator_name", "").strip()
+        response_text = data.get("response", "").strip()
+
+        if not alert_id or not operator_name or not response_text:
+            return jsonify({"error": "alert_id, operator_name and response are required"}), 400
+
+        try:
+            from db_queries import get_db_connection, insert_plan_alert_response
+            db = get_db_connection()
+            conn = db.connect()
+            success = insert_plan_alert_response(conn, int(alert_id), operator_name, response_text)
+            db.disconnect()
+            if success:
+                return jsonify({"status": "ok", "message": "Response saved"})
+            else:
+                return jsonify({"error": "Failed to save response"}), 500
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
     @app.route("/api/health")
     def api_health():
         folder_ok = os.path.isdir(config.planning.folder)
