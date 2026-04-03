@@ -32,11 +32,13 @@ class MonitorRow:
     context_note: str = ""        # Descrizione per tooltip/email
     qty_adjusted: bool = False    # True se qty pianificata sostituita da QtyMissing
     original_planned_qty: int = 0 # Qty originale dal piano Excel (prima dell'aggiustamento)
+    on_future: Optional[date] = None  # Data pianificata se si produce in anticipo
 
     def to_dict(self) -> dict:
         d = asdict(self)
         d["planning_date"] = self.planning_date.isoformat() if self.planning_date else None
         d["snapshot_time"] = self.snapshot_time.isoformat() if self.snapshot_time else None
+        d["on_future"] = self.on_future.isoformat() if self.on_future else None
         return d
 
 
@@ -100,13 +102,14 @@ def assign_color(projected_deficit: float, red_threshold: int) -> str:
 
 
 def _enrich_out_of_plan(snap: SnapshotRow, all_plan: List[PlanRow],
-                         conn, today: date) -> Tuple[str, str]:
+                         conn, today: date) -> Tuple[str, str, Optional[date]]:
     """
     Per un ordine fuori piano odierno, cerca contesto nei giorni precedenti e successivi.
-    Ritorna (context_star, context_note).
+    Ritorna (context_star, context_note, on_future).
     - "blue" + nota = ritardo da giorni precedenti
-    - "yellow" + nota = pianificato nei prossimi giorni
+    - "yellow" + nota + data = pianificato nei prossimi giorni (produzione in anticipo)
     - "" = nessun contesto trovato
+    on_future: data pianificata se si sta producendo in anticipo (solo per "yellow").
     """
     # 1. Cerca nei 2 giorni lavorativi precedenti
     past_match = check_order_in_past_plan(all_plan, snap.order_number, today, lookback_days=2)
@@ -121,15 +124,15 @@ def _enrich_out_of_plan(snap: SnapshotRow, all_plan: List[PlanRow],
             note += f", produced {past_qty} that day"
             if past_qty < past_match.planned_qty:
                 note += " - BEHIND SCHEDULE"
-        return ("blue", note)
+        return ("blue", note, None)
 
     # 2. Cerca nei 3 giorni lavorativi successivi
     future_match = check_order_in_future_plan(all_plan, snap.order_number, today, lookahead_days=3)
     if future_match:
         note = f"Scheduled for {future_match.production_date.strftime('%d/%m')} (qty {future_match.planned_qty})"
-        return ("yellow", note)
+        return ("yellow", note, future_match.production_date)
 
-    return ("", "")
+    return ("", "", None)
 
 
 def build_dashboard_data(
@@ -260,7 +263,7 @@ def build_dashboard_data(
             ))
         else:
             # Ordine fuori piano Excel - cerca contesto storico/futuro
-            context_star, context_note = _enrich_out_of_plan(snap, all_plan, conn, today)
+            context_star, context_note, future_date = _enrich_out_of_plan(snap, all_plan, conn, today)
 
             rows.append(MonitorRow(
                 order_number=snap.order_number,
@@ -280,7 +283,8 @@ def build_dashboard_data(
                 is_out_of_plan=True,
                 phase_order=snap.phase_order,
                 context_star=context_star,
-                context_note=context_note
+                context_note=context_note,
+                on_future=future_date
             ))
 
     # Ordinamento: fuori piano prima, poi per ordine, poi per phase_order

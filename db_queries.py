@@ -307,8 +307,18 @@ def create_plan_alert_tables(conn) -> None:
                 ProjectedEnd    INT,
                 Deficit         INT,
                 StatusColor     NVARCHAR(20),
-                AlertDate       DATETIME DEFAULT GETDATE()
+                AlertDate       DATETIME DEFAULT GETDATE(),
+                OnFuture        DATE NULL
             )
+        """)
+        # Aggiunta colonna OnFuture se tabella gia' esistente
+        cursor.execute("""
+            IF EXISTS (SELECT * FROM sys.tables WHERE name = 'PlanAlerts'
+                       AND schema_id = SCHEMA_ID('dbo'))
+               AND NOT EXISTS (SELECT * FROM sys.columns
+                               WHERE object_id = OBJECT_ID('traceability_rs.dbo.PlanAlerts')
+                                 AND name = 'OnFuture')
+            ALTER TABLE traceability_rs.dbo.PlanAlerts ADD OnFuture DATE NULL
         """)
         # Tabella PlanAlertResponses
         cursor.execute("""
@@ -343,8 +353,8 @@ def insert_plan_alerts(conn, rows) -> int:
             cursor.execute("""
                 INSERT INTO traceability_rs.dbo.PlanAlerts
                     (IdOrder, ProductName, PhaseName, QtyInXls, QtyProduced,
-                     QtyExpected, ProjectedEnd, Deficit, StatusColor)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     QtyExpected, ProjectedEnd, Deficit, StatusColor, OnFuture)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
                 r.id_order,
                 r.product_code,
@@ -354,7 +364,8 @@ def insert_plan_alerts(conn, rows) -> int:
                 r.expected_by_now,
                 r.projected_end_qty,
                 r.projected_deficit,
-                "out_of_plan" if r.is_out_of_plan else r.status_color
+                "out_of_plan" if r.is_out_of_plan else r.status_color,
+                r.on_future
             )
             inserted += 1
         cursor.close()
