@@ -288,6 +288,7 @@ tbody tr:hover {
 .dot-green { background: #2ecc71; box-shadow: 0 0 6px #2ecc71; }
 .dot-yellow { background: #f1c40f; box-shadow: 0 0 6px #f1c40f; }
 .dot-red { background: #e74c3c; box-shadow: 0 0 6px #e74c3c; }
+.dot-adjusted { background: #f1c40f; box-shadow: 0 0 6px #f1c40f; cursor: help; }
 
 /* Stars */
 .star {

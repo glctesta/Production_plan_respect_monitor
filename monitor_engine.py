@@ -30,6 +30,8 @@ class MonitorRow:
     phase_order: int = 0          # Ordinamento fase da PhaseOrder
     context_star: str = ""        # "" = none, "yellow" = future, "blue" = delay
     context_note: str = ""        # Descrizione per tooltip/email
+    qty_adjusted: bool = False    # True se qty pianificata sostituita da QtyMissing
+    original_planned_qty: int = 0 # Qty originale dal piano Excel (prima dell'aggiustamento)
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -136,7 +138,8 @@ def build_dashboard_data(
     config: AppConfig,
     all_plan: List[PlanRow] = None,
     conn=None,
-    resolved_plan: Dict[Tuple[str, int], 'PlanRow'] = None
+    resolved_plan: Dict[Tuple[str, int], 'PlanRow'] = None,
+    qty_missing_map: Dict[Tuple[str, int], int] = None
 ) -> Tuple[List[MonitorRow], List[dict]]:
     """
     Costruisce i dati della dashboard confrontando snapshot con piano.
@@ -148,6 +151,8 @@ def build_dashboard_data(
         all_plan = []
     if resolved_plan is None:
         resolved_plan = {}
+    if qty_missing_map is None:
+        qty_missing_map = {}
 
     # Set di ordini presenti nel piano odierno
     plan_orders: set = set(pr.order_number for pr in todays_plan)
@@ -206,6 +211,23 @@ def build_dashboard_data(
                     if not matched:
                         planned_qty = plan_entries[0].planned_qty
 
+            # Aggiustamento qty: se QtyMissing dalla tracciabilita' < planned_qty Excel
+            original_qty = planned_qty
+            qty_adjusted = False
+            missing_key = (snap.order_number, snap.id_phase)
+            if missing_key in qty_missing_map:
+                qty_missing = qty_missing_map[missing_key]
+                if qty_missing == 0:
+                    # Fase completata: non mostrare la riga
+                    logger.debug("  skip (qty_missing=0): order='%s' phase=%d",
+                                 snap.order_number, snap.id_phase)
+                    continue
+                if qty_missing < planned_qty:
+                    planned_qty = qty_missing
+                    qty_adjusted = True
+                    logger.info("  qty adjusted: order='%s' phase=%d excel=%d -> missing=%d",
+                                snap.order_number, snap.id_phase, original_qty, qty_missing)
+
             expected, projected, deficit = compute_projection(
                 qty_done=snap.qty_processed,
                 planned_qty=planned_qty,
@@ -232,7 +254,9 @@ def build_dashboard_data(
                 status_color=color,
                 in_excel_plan=True,
                 is_out_of_plan=False,
-                phase_order=snap.phase_order
+                phase_order=snap.phase_order,
+                qty_adjusted=qty_adjusted,
+                original_planned_qty=original_qty
             ))
         else:
             # Ordine fuori piano Excel - cerca contesto storico/futuro

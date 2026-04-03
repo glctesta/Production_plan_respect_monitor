@@ -1,7 +1,7 @@
 import logging
 from dataclasses import dataclass
 from datetime import datetime, date, timedelta
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from config_manager import ConfigManager
 from db_connection import DatabaseConnection
@@ -225,6 +225,46 @@ def get_past_production(conn, id_order: int, id_phase: int, target_date: date) -
         logger.error("Errore get_past_production per ordine=%d fase=%d data=%s: %s",
                       id_order, id_phase, target_date, e)
         return None
+
+
+def get_qty_missing(conn, id_order: int) -> Dict[int, int]:
+    """
+    Per un ordine, calcola la quantita' mancante per ogni fase,
+    ovvero orderquantity - boards gia' scansionate PRIMA dell'inizio turno odierno (07:30).
+    Ritorna {id_phase: qty_missing}.
+    """
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT Phases.IDPhase,
+                   Orders.orderquantity
+                     - ISNULL(COUNT(DISTINCT Traceability_rs.dbo.BoardLabels(Scannings.IDBoard)), 0)
+                     AS QtyMissing
+            FROM Traceability_rs.dbo.Scannings
+            INNER JOIN Traceability_rs.dbo.OrderPhases
+                ON Scannings.IDOrderPhase = OrderPhases.IDOrderPhase
+            INNER JOIN Traceability_rs.dbo.Orders
+                ON OrderPhases.IDOrder = Orders.IDOrder
+            INNER JOIN Traceability_rs.dbo.Phases
+                ON OrderPhases.IDPhase = Phases.IDPhase
+            INNER JOIN Traceability_rs.dbo.Products
+                ON Orders.IDProduct = Products.IDProduct
+            INNER JOIN Traceability_rs.dbo.Boards
+                ON Boards.IDBoard = Scannings.IDBoard
+            WHERE Scannings.ScanTimeFinish <
+                  CAST(CAST(GETDATE() AS DATE) AS DATETIME) + CAST('07:30:00' AS DATETIME)
+                AND Phases.IDPhase IN (2, 4, 102, 103, 142, 111, 116, 5, 9, 107)
+                AND Orders.IDOrder = ?
+            GROUP BY Phases.IDPhase, Orders.idorder, Orders.orderquantity
+        """, id_order)
+        result = {}
+        for row in cursor.fetchall():
+            result[row[0]] = max(0, row[1]) if row[1] is not None else 0
+        cursor.close()
+        return result
+    except Exception as e:
+        logger.error("Errore get_qty_missing per ordine=%d: %s", id_order, e)
+        return {}
 
 
 def mark_checked(conn, id_orders_phases: List[Tuple[int, int]]) -> None:

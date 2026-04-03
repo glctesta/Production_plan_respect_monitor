@@ -6,7 +6,7 @@ from typing import Optional, List
 
 from app_config import AppConfig
 from excel_parser import find_latest_excel, parse_last_phase, get_todays_plan, PlanRow
-from db_queries import get_db_connection, insert_snapshots, read_unchecked_snapshots, mark_checked, resolve_phase
+from db_queries import get_db_connection, insert_snapshots, read_unchecked_snapshots, mark_checked, resolve_phase, resolve_order, get_qty_missing
 from monitor_engine import build_dashboard_data, compute_summary, MonitorRow
 from email_alerter import EmailAlertManager
 
@@ -186,6 +186,23 @@ class CycleOrchestrator:
                     unique_machines = set(pr.machine_name for pr in todays_plan)
                     logger.error("NESSUNA fase risolta! Macchine nel piano Excel: %s", unique_machines)
 
+                # 4b. Calcola QtyMissing dalla tracciabilita' per ogni ordine
+                qty_missing_map = {}  # {(order_number, id_phase): qty_missing}
+                order_ids_cache = {}  # {order_number: id_order}
+                orders_loaded = set()
+                for (order_number, id_phase), pr in resolved_plan.items():
+                    if order_number not in order_ids_cache:
+                        result = resolve_order(conn, order_number)
+                        order_ids_cache[order_number] = result[0] if result else None
+                    id_order = order_ids_cache.get(order_number)
+                    if id_order is not None and id_order not in orders_loaded:
+                        orders_loaded.add(id_order)
+                        phase_missing = get_qty_missing(conn, id_order)
+                        for ph_id, qty_m in phase_missing.items():
+                            qty_missing_map[(order_number, ph_id)] = qty_m
+
+                logger.info("QtyMissing calcolate per %d coppie ordine/fase", len(qty_missing_map))
+
                 # 5. Inserisci snapshot
                 try:
                     snap_count = insert_snapshots(conn)
@@ -200,7 +217,8 @@ class CycleOrchestrator:
                 rows, mapping_errors = build_dashboard_data(
                     snapshots, todays_plan, self.config,
                     all_plan=all_plan, conn=conn,
-                    resolved_plan=resolved_plan
+                    resolved_plan=resolved_plan,
+                    qty_missing_map=qty_missing_map
                 )
                 summary = compute_summary(rows)
 

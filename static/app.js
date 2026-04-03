@@ -79,7 +79,14 @@ function renderDashboard(data) {
             rowClass = 'row-green';
         }
 
-        const planLabel = r.is_out_of_plan ? '<em>NOT IN PLAN</em>' : r.planned_qty_day;
+        let planLabel;
+        if (r.is_out_of_plan) {
+            planLabel = '<em>NOT IN PLAN</em>';
+        } else if (r.qty_adjusted) {
+            planLabel = `<span class="dot dot-adjusted" title="Qty pianificata Excel: ${r.original_planned_qty}"></span>${r.planned_qty_day}`;
+        } else {
+            planLabel = r.planned_qty_day;
+        }
         const deficitLabel = r.is_out_of_plan ? '-' : r.projected_deficit;
         const expectedLabel = r.is_out_of_plan ? '-' : r.expected_by_now;
         const projectedLabel = r.is_out_of_plan ? '-' : r.projected_end_qty;
