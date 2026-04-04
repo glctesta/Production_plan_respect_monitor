@@ -239,17 +239,21 @@ class CycleOrchestrator:
                     self.dashboard_data["mapping_errors"] = mapping_errors
                     self.dashboard_data["last_error"] = None
 
-                # 8. Invia email se necessario
+                # 8. Invia email se necessario (solo giorni lavorativi)
+                is_workday = self.config.holidays.is_working_day(date.today())
                 try:
-                    if self.config.email.enabled:
+                    if self.config.email.enabled and is_workday:
                         self.email_alerter.send_alerts(conn, rows, summary, excel_file)
+                    elif self.config.email.enabled and not is_workday:
+                        logger.info("Email alert non inviate: giorno non lavorativo (%s)",
+                                    date.today().strftime("%A %d/%m/%Y"))
                 except Exception as e:
                     logger.error("Errore invio email alert: %s", e)
 
-                # 8b. Email aggiustamento quantita' (1x/giorno)
+                # 8b. Email aggiustamento quantita' (1x/giorno, solo giorni lavorativi)
                 try:
                     adjusted_rows = [r for r in rows if r.qty_adjusted]
-                    if adjusted_rows and self.config.email.enabled:
+                    if adjusted_rows and self.config.email.enabled and is_workday:
                         self.email_alerter.send_qty_adjustment_email(conn, adjusted_rows, excel_file)
                 except Exception as e:
                     logger.error("Errore invio email aggiustamento qty: %s", e)
@@ -260,7 +264,7 @@ class CycleOrchestrator:
                     if not self._tables_created:
                         create_plan_alert_tables(conn)
                         self._tables_created = True
-                    if self.config.holidays.is_working_day(date.today()):
+                    if is_workday:
                         alert_rows = [r for r in rows if r.status_color == "red" or r.is_out_of_plan]
                         if alert_rows:
                             insert_plan_alerts(conn, alert_rows)
