@@ -255,13 +255,18 @@ class CycleOrchestrator:
                     logger.error("Errore invio email aggiustamento qty: %s", e)
 
                 # 8c. Crea tabelle PlanAlerts se necessario e salva alert
+                #     Solo nei giorni lavorativi (lun-ven, esclusi festivi)
                 try:
                     if not self._tables_created:
                         create_plan_alert_tables(conn)
                         self._tables_created = True
-                    alert_rows = [r for r in rows if r.status_color == "red" or r.is_out_of_plan]
-                    if alert_rows:
-                        insert_plan_alerts(conn, alert_rows)
+                    if self.config.holidays.is_working_day(date.today()):
+                        alert_rows = [r for r in rows if r.status_color == "red" or r.is_out_of_plan]
+                        if alert_rows:
+                            insert_plan_alerts(conn, alert_rows)
+                    else:
+                        logger.info("PlanAlerts non salvati: giorno non lavorativo (%s)",
+                                    date.today().strftime("%A %d/%m/%Y"))
                 except Exception as e:
                     logger.error("Errore salvataggio PlanAlerts: %s", e)
 

@@ -1,7 +1,8 @@
 import yaml
 import os
-from datetime import time
+from datetime import time, date
 from dataclasses import dataclass, field
+from typing import List
 
 
 @dataclass
@@ -36,6 +37,20 @@ class EmailConfig:
 
 
 @dataclass
+class HolidaysConfig:
+    dates: List[date] = field(default_factory=list)
+
+    def is_holiday(self, d: date) -> bool:
+        return d in self.dates
+
+    def is_working_day(self, d: date) -> bool:
+        """Ritorna True se il giorno e' lavorativo (lun-ven e non festivo)."""
+        if d.weekday() >= 5:  # 5=sabato, 6=domenica
+            return False
+        return not self.is_holiday(d)
+
+
+@dataclass
 class UIConfig:
     enable_blinking_alerts: bool = True
 
@@ -53,6 +68,7 @@ class AppConfig:
     polling: PollingConfig = field(default_factory=PollingConfig)
     thresholds: ThresholdsConfig = field(default_factory=ThresholdsConfig)
     email: EmailConfig = field(default_factory=EmailConfig)
+    holidays: HolidaysConfig = field(default_factory=HolidaysConfig)
     ui: UIConfig = field(default_factory=UIConfig)
     server: ServerConfig = field(default_factory=ServerConfig)
 
@@ -103,6 +119,20 @@ def load_config(path: str = None) -> AppConfig:
     config.email.settings_attribute = e.get("settings_attribute", config.email.settings_attribute)
     config.email.yellow_cooldown_minutes = e.get("yellow_cooldown_minutes", config.email.yellow_cooldown_minutes)
     config.email.red_cooldown_minutes = e.get("red_cooldown_minutes", config.email.red_cooldown_minutes)
+
+    # Holidays
+    h = raw.get("holidays", {})
+    holiday_dates = h.get("dates", [])
+    parsed_holidays = []
+    for hd in holiday_dates:
+        try:
+            if isinstance(hd, date):
+                parsed_holidays.append(hd)
+            else:
+                parsed_holidays.append(date.fromisoformat(str(hd).strip()))
+        except (ValueError, TypeError):
+            pass  # Ignora date malformate
+    config.holidays.dates = parsed_holidays
 
     # UI
     u = raw.get("ui", {})
