@@ -73,6 +73,14 @@ def create_app(config: AppConfig, orchestrator: CycleOrchestrator) -> Flask:
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
+    @app.route("/api/output-summary")
+    def api_output_summary():
+        return jsonify(orchestrator.get_output_status())
+
+    @app.route("/api/output-config")
+    def api_output_config():
+        return jsonify(orchestrator.output_config)
+
     @app.route("/api/health")
     def api_health():
         folder_ok = os.path.isdir(config.planning.folder)

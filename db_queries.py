@@ -294,8 +294,7 @@ def create_plan_alert_tables(conn) -> None:
         cursor = conn.cursor()
         # Tabella PlanAlerts
         cursor.execute("""
-            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'PlanAlerts'
-                          AND schema_id = SCHEMA_ID('dbo'))
+            IF OBJECT_ID('traceability_rs.dbo.PlanAlerts', 'U') IS NULL
             CREATE TABLE traceability_rs.dbo.PlanAlerts (
                 AlertId         INT IDENTITY(1,1) PRIMARY KEY,
                 IdOrder         INT NOT NULL,
@@ -313,8 +312,7 @@ def create_plan_alert_tables(conn) -> None:
         """)
         # Aggiunta colonna OnFuture se tabella gia' esistente
         cursor.execute("""
-            IF EXISTS (SELECT * FROM sys.tables WHERE name = 'PlanAlerts'
-                       AND schema_id = SCHEMA_ID('dbo'))
+            IF OBJECT_ID('traceability_rs.dbo.PlanAlerts', 'U') IS NOT NULL
                AND NOT EXISTS (SELECT * FROM sys.columns
                                WHERE object_id = OBJECT_ID('traceability_rs.dbo.PlanAlerts')
                                  AND name = 'OnFuture')
@@ -322,8 +320,7 @@ def create_plan_alert_tables(conn) -> None:
         """)
         # Tabella PlanAlertResponses
         cursor.execute("""
-            IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'PlanAlertResponses'
-                          AND schema_id = SCHEMA_ID('dbo'))
+            IF OBJECT_ID('traceability_rs.dbo.PlanAlertResponses', 'U') IS NULL
             CREATE TABLE traceability_rs.dbo.PlanAlertResponses (
                 ResponseId      INT IDENTITY(1,1) PRIMARY KEY,
                 AlertId         INT NOT NULL FOREIGN KEY REFERENCES traceability_rs.dbo.PlanAlerts(AlertId),
@@ -374,6 +371,107 @@ def insert_plan_alerts(conn, rows) -> int:
     except Exception as e:
         logger.error("Errore inserimento PlanAlerts: %s", e)
         return 0
+
+
+def get_monthly_daily_production(conn, year: int, month: int) -> List[Dict[str, int]]:
+    """
+    Calcola la produzione totale giornaliera per ogni giorno del mese corrente.
+    Usa BoxDetails (pezzi imballati) raggruppati per ordine, poi sommati.
+    Ogni giorno lavorativo va dalle 07:30 del giorno alle 07:29 del giorno successivo.
+    Esegue una singola query dal 1 del mese ad oggi.
+    Ritorna lista di {day: N, produced: M}.
+    """
+    results = []
+    today = date.today()
+
+    try:
+        month_start = datetime.combine(date(year, month, 1),
+                                       datetime.strptime("07:30", "%H:%M").time())
+        # Fine: domani 07:29 (per includere il giorno corrente)
+        month_end = datetime.combine(today + timedelta(days=1),
+                                     datetime.strptime("07:29", "%H:%M").time())
+
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT DayNum, SUM(QtyProcessed) AS TotalProduced
+            FROM (
+                SELECT DAY(CAST(
+                    CASE WHEN CAST(BoxDetails.BoardPackTime AS TIME) < '07:30:00'
+                         THEN DATEADD(DAY, -1, BoxDetails.BoardPackTime)
+                         ELSE BoxDetails.BoardPackTime
+                    END AS DATE)) AS DayNum,
+                    COUNT(*) AS QtyProcessed
+                FROM Traceability_rs.dbo.BoxDetails
+                INNER JOIN Traceability_rs.dbo.Boards ON Boards.IDBoard = BoxDetails.IDBoard
+                INNER JOIN Traceability_rs.dbo.Orders ON Orders.IDOrder = Boards.IDOrder
+                INNER JOIN Traceability_rs.dbo.Boxes ON BoxDetails.IDBox = Boxes.IDBox
+                WHERE BoxDetails.BoardPackTime BETWEEN ? AND ?
+                GROUP BY
+                    DAY(CAST(
+                        CASE WHEN CAST(BoxDetails.BoardPackTime AS TIME) < '07:30:00'
+                             THEN DATEADD(DAY, -1, BoxDetails.BoardPackTime)
+                             ELSE BoxDetails.BoardPackTime
+                        END AS DATE)),
+                    Orders.OrderNumber,
+                    Orders.OrderQuantity
+            ) AS T
+            GROUP BY DayNum
+            ORDER BY DayNum
+        """, month_start, month_end)
+
+        for row in cursor.fetchall():
+            day_num = int(row[0]) if row[0] else 0
+            produced = int(row[1]) if row[1] else 0
+            if day_num > 0 and produced > 0:
+                results.append({"day": day_num, "produced": produced})
+        cursor.close()
+        logger.info("Monthly production loaded: %d days with data for %d-%02d", len(results), year, month)
+        return results
+    except Exception as e:
+        logger.error("Error get_monthly_daily_production for %d-%02d: %s", year, month, e)
+        return results
+
+
+def get_today_production_by_phase(conn) -> List[Dict]:
+    """
+    Calcola la produzione odierna raggruppata per fase.
+    Ritorna lista di {id_phase: N, phase_name: str, produced: M}.
+    """
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT Phases.IdPhase,
+                   Phases.PhaseName,
+                   COUNT(DISTINCT Traceability_rs.dbo.BoardLabels(Scannings.IDBoard)) AS Produced
+            FROM Traceability_rs.dbo.Scannings
+            INNER JOIN Traceability_rs.dbo.OrderPhases
+                ON Scannings.IDOrderPhase = OrderPhases.IDOrderPhase
+            INNER JOIN Traceability_rs.dbo.Orders
+                ON OrderPhases.IDOrder = Orders.IDOrder
+            INNER JOIN Traceability_rs.dbo.Phases
+                ON OrderPhases.IDPhase = Phases.IDPhase
+            INNER JOIN Traceability_rs.dbo.Boards
+                ON Boards.IDBoard = Scannings.IDBoard
+            WHERE Scannings.ScanTimeFinish BETWEEN
+                CAST(CAST(GETDATE() AS DATE) AS DATETIME) + CAST('07:30:00' AS DATETIME) AND
+                CAST(CAST(GETDATE() + 1 AS DATE) AS DATETIME) + CAST('07:30:00' AS DATETIME)
+                AND IsPass = 1
+            GROUP BY Phases.IdPhase, Phases.PhaseName
+            ORDER BY Phases.PhaseName
+        """)
+        results = []
+        for row in cursor.fetchall():
+            results.append({
+                "id_phase": row[0],
+                "phase_name": str(row[1]).strip() if row[1] else "",
+                "produced": int(row[2]) if row[2] else 0
+            })
+        cursor.close()
+        logger.info("Today production by phase: %d phases", len(results))
+        return results
+    except Exception as e:
+        logger.error("Error get_today_production_by_phase: %s", e)
+        return []
 
 
 def insert_plan_alert_response(conn, alert_id: int, operator_name: str, response: str) -> bool:

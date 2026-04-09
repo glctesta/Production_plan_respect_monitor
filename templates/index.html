@@ -5,88 +5,153 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Production Plan Monitor</title>
     <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <div class="header-top">
-                <h1>Production Plan Monitor</h1>
-                <div class="header-right">
-                    <span id="live-clock" class="live-clock"></span>
-                    <img src="/static/Logo.png" alt="Logo" class="header-logo">
+    <!-- ==================== DASHBOARD PAGE ==================== -->
+    <div id="dashboard-page" class="page-container">
+        <div class="container">
+            <header>
+                <div class="header-top">
+                    <h1>Production Plan Monitor</h1>
+                    <div class="header-right">
+                        <span id="live-clock" class="live-clock"></span>
+                        <img src="/static/Logo.png" alt="Logo" class="header-logo">
+                    </div>
                 </div>
-            </div>
-            <div class="header-info">
-                <div class="info-group">
-                    <span class="label">Excel file:</span>
-                    <span id="excel-file">-</span>
+                <div class="header-info">
+                    <div class="info-group">
+                        <span class="label">Excel file:</span>
+                        <span id="excel-file">-</span>
+                    </div>
+                    <div class="info-group">
+                        <span class="label">Last update:</span>
+                        <span id="last-update">-</span>
+                    </div>
+                    <div class="info-group">
+                        <button id="btn-run-now" onclick="runNow()">Run Now</button>
+                        <button id="btn-scroll-mode" onclick="toggleScrollMode()">Manual Scroll</button>
+                        <button id="btn-change-view" onclick="manualSwitchView()">Change View</button>
+                        <span id="run-status"></span>
+                    </div>
                 </div>
-                <div class="info-group">
-                    <span class="label">Last update:</span>
-                    <span id="last-update">-</span>
-                </div>
-                <div class="info-group">
-                    <button id="btn-run-now" onclick="runNow()">Run Now</button>
-                    <button id="btn-scroll-mode" onclick="toggleScrollMode()">Manual Scroll</button>
-                    <span id="run-status"></span>
-                </div>
-            </div>
-        </header>
+            </header>
 
-        <div class="summary-bar">
-            <div class="summary-item total">
-                <span class="count" id="count-total">0</span>
-                <span class="label">Total</span>
+            <div class="summary-bar">
+                <div class="summary-item total">
+                    <span class="count" id="count-total">0</span>
+                    <span class="label">Total</span>
+                </div>
+                <div class="summary-item green">
+                    <span class="count" id="count-green">0</span>
+                    <span class="label">On Track</span>
+                </div>
+                <div class="summary-item yellow">
+                    <span class="count" id="count-yellow">0</span>
+                    <span class="label">Warning</span>
+                </div>
+                <div class="summary-item red">
+                    <span class="count" id="count-red">0</span>
+                    <span class="label">Critical</span>
+                </div>
+                <div class="summary-item out-of-plan">
+                    <span class="count" id="count-oop">0</span>
+                    <span class="label">Out of Plan</span>
+                </div>
             </div>
-            <div class="summary-item green">
-                <span class="count" id="count-green">0</span>
-                <span class="label">On Track</span>
+
+            <div id="error-banner" class="error-banner" style="display:none;"></div>
+
+            <div class="table-wrapper" id="table-wrapper">
+                <table id="monitor-table">
+                    <thead>
+                        <tr>
+                            <th>Order Number</th>
+                            <th>Product Code</th>
+                            <th>Phase</th>
+                            <th>Planning QTY/Day</th>
+                            <th>Qty Done</th>
+                            <th>Expected Now</th>
+                            <th>Projected End</th>
+                            <th>Deficit</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body">
+                        <tr><td colspan="8" class="empty-msg">Waiting for first cycle...</td></tr>
+                    </tbody>
+                </table>
             </div>
-            <div class="summary-item yellow">
-                <span class="count" id="count-yellow">0</span>
-                <span class="label">Warning</span>
+
+            <div class="legend-bar">
+                <span class="legend-item"><span class="dot dot-adjusted" style="width:10px;height:10px;"></span> Qty adjusted from traceability</span>
+                <span class="legend-item"><span class="star star-yellow">&#9733;</span> Scheduled in upcoming days</span>
+                <span class="legend-item"><span class="star star-blue">&#9733;</span> Delayed from previous days</span>
             </div>
-            <div class="summary-item red">
-                <span class="count" id="count-red">0</span>
-                <span class="label">Critical</span>
-            </div>
-            <div class="summary-item out-of-plan">
-                <span class="count" id="count-oop">0</span>
-                <span class="label">Out of Plan</span>
+
+            <div id="mapping-errors" class="mapping-errors" style="display:none;">
+                <h3 onclick="toggleErrors()">Mapping Errors <span id="error-toggle">&#9660;</span></h3>
+                <div id="error-list" class="error-list"></div>
             </div>
         </div>
+    </div>
 
-        <div id="error-banner" class="error-banner" style="display:none;"></div>
+    <!-- ==================== OUTPUT PAGE ==================== -->
+    <div id="output-page" class="page-container" style="display:none;">
+        <div class="container output-container">
+            <header>
+                <div class="header-top">
+                    <h1 id="output-title">Output VDW RO</h1>
+                    <div class="header-right">
+                        <span id="live-clock-output" class="live-clock"></span>
+                        <img src="/static/Logo.png" alt="Logo" class="header-logo">
+                    </div>
+                </div>
+                <div class="header-info">
+                    <div class="info-group">
+                        <span class="label">Last update:</span>
+                        <span id="output-last-update">-</span>
+                    </div>
+                    <div class="info-group">
+                        <span class="label">Daily Target:</span>
+                        <span id="output-target">2000</span>
+                    </div>
+                    <div class="info-group">
+                        <span class="label">Today Total:</span>
+                        <span id="output-today-total" class="output-total-value">0</span>
+                    </div>
+                    <div class="info-group">
+                        <span class="label">Gap:</span>
+                        <span id="output-gap" class="output-gap-value">0</span>
+                    </div>
+                    <div class="info-group">
+                        <span class="label">Forecast:</span>
+                        <span id="output-forecast"></span>
+                    </div>
+                    <div class="info-group">
+                        <button id="btn-change-view-output" onclick="manualSwitchView()">Change View</button>
+                    </div>
+                </div>
+            </header>
 
-        <div class="table-wrapper" id="table-wrapper">
-            <table id="monitor-table">
-                <thead>
-                    <tr>
-                        <th>Order Number</th>
-                        <th>Product Code</th>
-                        <th>Phase</th>
-                        <th>Planning QTY/Day</th>
-                        <th>Qty Done</th>
-                        <th>Expected Now</th>
-                        <th>Projected End</th>
-                        <th>Deficit</th>
-                    </tr>
-                </thead>
-                <tbody id="table-body">
-                    <tr><td colspan="8" class="empty-msg">Waiting for first cycle...</td></tr>
-                </tbody>
-            </table>
-        </div>
+            <!-- Phase summary table -->
+            <div class="output-phases-section">
+                <div id="output-phases-table-container">
+                    <table id="output-phases-table" class="phases-table">
+                        <thead>
+                            <tr id="output-phases-header"></tr>
+                        </thead>
+                        <tbody>
+                            <tr id="output-phases-planned"></tr>
+                            <tr id="output-phases-produced"></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
 
-        <div class="legend-bar">
-            <span class="legend-item"><span class="dot dot-adjusted" style="width:10px;height:10px;"></span> Qty adjusted from traceability</span>
-            <span class="legend-item"><span class="star star-yellow">&#9733;</span> Scheduled in upcoming days</span>
-            <span class="legend-item"><span class="star star-blue">&#9733;</span> Delayed from previous days</span>
-        </div>
-
-        <div id="mapping-errors" class="mapping-errors" style="display:none;">
-            <h3 onclick="toggleErrors()">Mapping Errors <span id="error-toggle">&#9660;</span></h3>
-            <div id="error-list" class="error-list"></div>
+            <!-- Chart -->
+            <div class="output-chart-section">
+                <canvas id="output-chart"></canvas>
+            </div>
         </div>
     </div>
 

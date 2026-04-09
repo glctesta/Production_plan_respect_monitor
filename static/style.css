@@ -132,6 +132,25 @@ header h1 {
     border-color: #27ae60;
 }
 
+#btn-change-view,
+#btn-change-view-output {
+    background: #0f3460;
+    color: #8892b0;
+    border: 1px solid #8892b0;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+
+#btn-change-view:hover,
+#btn-change-view-output:hover {
+    background: #1a4a7a;
+    color: #ccd6f6;
+}
+
 #run-status {
     font-size: 12px;
     color: #64ffda;
@@ -396,6 +415,158 @@ tbody tr:hover {
 .error-list p {
     padding: 4px 0;
     border-bottom: 1px solid #1a1a2e;
+}
+
+/* ===================== OUTPUT PAGE ===================== */
+
+.page-container {
+    height: 100vh;
+    overflow: hidden;
+}
+
+.output-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+/* Phase summary table */
+.output-phases-section {
+    flex-shrink: 0;
+    margin-bottom: 15px;
+    overflow-x: auto;
+}
+
+.phases-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    background: #16213e;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.phases-table thead tr {
+    background: #0f3460;
+}
+
+.phases-table th {
+    padding: 10px 16px;
+    text-align: center;
+    color: #ccd6f6;
+    font-weight: 700;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-bottom: 2px solid #1a1a2e;
+    border-right: 1px solid #1a1a2e;
+}
+
+.phase-label-col {
+    text-align: left !important;
+    min-width: 90px;
+    width: 90px;
+}
+
+.phase-col {
+    min-width: 80px;
+}
+
+.phase-label-cell {
+    text-align: left;
+    padding: 10px 16px;
+    font-weight: 700;
+    color: #8892b0;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    border-right: 1px solid #1a1a2e;
+    border-bottom: 1px solid #1a1a2e;
+}
+
+.phase-value-cell {
+    text-align: center;
+    padding: 10px 16px;
+    font-weight: 700;
+    font-size: 16px;
+    color: #ccd6f6;
+    border-right: 1px solid #1a1a2e;
+    border-bottom: 1px solid #1a1a2e;
+}
+
+.phase-ok {
+    color: #2ecc71;
+    background: rgba(46, 204, 113, 0.1);
+}
+
+.phase-behind {
+    color: #e74c3c;
+    background: rgba(231, 76, 60, 0.1);
+}
+
+/* Chart section */
+.output-chart-section {
+    flex: 1;
+    min-height: 300px;
+    background: #16213e;
+    border-radius: 10px;
+    padding: 15px;
+    position: relative;
+}
+
+.output-chart-section canvas {
+    width: 100% !important;
+    height: 100% !important;
+}
+
+/* Output total value */
+.output-total-value {
+    font-size: 18px !important;
+    font-weight: 700 !important;
+    color: #64ffda !important;
+}
+
+/* Gap */
+.output-gap-positive {
+    font-size: 18px !important;
+    font-weight: 700 !important;
+    color: #2ecc71 !important;
+}
+
+.output-gap-negative {
+    font-size: 18px !important;
+    font-weight: 700 !important;
+    color: #e74c3c !important;
+}
+
+/* Forecast */
+.output-forecast-great,
+.output-forecast-good,
+.output-forecast-warning,
+.output-forecast-bad,
+.output-forecast-neutral {
+    font-size: 18px !important;
+    font-weight: 700 !important;
+}
+
+.output-forecast-great {
+    color: #2ecc71 !important;
+}
+
+.output-forecast-good {
+    color: #64ffda !important;
+}
+
+.output-forecast-warning {
+    color: #f1c40f !important;
+}
+
+.output-forecast-bad {
+    color: #e74c3c !important;
+}
+
+.output-forecast-neutral {
+    color: #8892b0 !important;
 }
 
 /* Responsive */

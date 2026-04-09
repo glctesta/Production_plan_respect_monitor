@@ -1,14 +1,16 @@
+import json
 import logging
 import threading
 import os
 from datetime import datetime, date, time, timedelta
-from typing import Optional, List
+from typing import Optional, List, Dict
 
 from app_config import AppConfig
 from excel_parser import find_latest_excel, parse_last_phase, get_todays_plan, PlanRow
 from db_queries import (get_db_connection, insert_snapshots, read_unchecked_snapshots,
                         mark_checked, resolve_phase, resolve_order, get_qty_missing,
-                        create_plan_alert_tables, insert_plan_alerts)
+                        create_plan_alert_tables, insert_plan_alerts,
+                        get_monthly_daily_production, get_today_production_by_phase)
 from monitor_engine import build_dashboard_data, compute_summary, MonitorRow
 from email_alerter import EmailAlertManager
 
@@ -33,6 +35,9 @@ class CycleOrchestrator:
         self._cached_all_plan: List[PlanRow] = []
         self._last_excel_check: Optional[datetime] = None
 
+        # Output config
+        self.output_config = self._load_output_config()
+
         # Stato condiviso per la dashboard (thread-safe via _lock)
         self.dashboard_data = {
             "rows": [],
@@ -44,6 +49,27 @@ class CycleOrchestrator:
             "mapping_errors": [],
             "last_error": None
         }
+
+        # Output page data
+        self.output_data = {
+            "phases": [],
+            "daily_total_produced": 0,
+            "target": self.output_config.get("daily_target", 2000),
+            "history": [],
+            "last_update": None
+        }
+
+    @staticmethod
+    def _load_output_config() -> dict:
+        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "output_config.json")
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            logger.warning("Could not load output_config.json: %s, using defaults", e)
+            return {"daily_target": 2000, "chart_title": "Output VDW RO",
+                    "rotation_show_seconds": 300, "rotation_cycle_seconds": 900,
+                    "output_poll_seconds": 60}
 
     def _is_within_workday(self) -> bool:
         now = datetime.now().time()
@@ -229,6 +255,48 @@ class CycleOrchestrator:
                 logger.info("Risultati: verde=%d, giallo=%d, rosso=%d, fuori_piano=%d",
                             summary["green"], summary["yellow"], summary["red"], summary["out_of_plan"])
 
+                # 7a. Build output page data (phase summary + monthly history)
+                try:
+                    phase_summary = self._build_phase_summary(rows, conn)
+                    today = date.today()
+                    raw_history = get_monthly_daily_production(conn, today.year, today.month)
+                    working_history = self._merge_non_working_days(raw_history, today.year, today.month)
+                    # Daily total from raw history (before merge)
+                    today_total = 0
+                    for h in raw_history:
+                        if h["day"] == today.day:
+                            today_total = h["produced"]
+                            break
+
+                    daily_target = self.output_config.get("daily_target", 2000)
+                    gap = today_total - daily_target
+
+                    # Project end-of-day production based on elapsed workday
+                    now = datetime.now()
+                    ws = self.config.workday.start
+                    we = self.config.workday.end
+                    day_start = datetime.combine(today, ws)
+                    day_end = datetime.combine(today, we)
+                    total_minutes = self.config.workday.total_minutes
+
+                    projected_end = 0
+                    if now > day_start and total_minutes > 0:
+                        elapsed = min((now - day_start).total_seconds() / 60.0, total_minutes)
+                        if elapsed >= 5:
+                            fraction = elapsed / total_minutes
+                            projected_end = int(round(today_total / fraction)) if fraction > 0 else 0
+
+                    with self._lock:
+                        self.output_data["phases"] = phase_summary
+                        self.output_data["history"] = working_history
+                        self.output_data["target"] = daily_target
+                        self.output_data["last_update"] = datetime.now().isoformat()
+                        self.output_data["daily_total_produced"] = today_total
+                        self.output_data["gap"] = gap
+                        self.output_data["projected_end"] = projected_end
+                except Exception as e:
+                    logger.error("Error building output data: %s", e)
+
                 # 7. Aggiorna stato condiviso
                 with self._lock:
                     self.dashboard_data["rows"] = [r.to_dict() for r in rows]
@@ -300,6 +368,105 @@ class CycleOrchestrator:
 
         return self.dashboard_data
 
+    def _merge_non_working_days(self, raw_history: List[dict], year: int, month: int) -> List[dict]:
+        """
+        Processa i dati storici mensili:
+        - Rimuove weekend e festivi dall'asse X
+        - Somma la produzione di sabato/domenica/festivi al venerdi' (o ultimo giorno lavorativo) precedente
+        - Aggiunge il numero di settimana ISO a ogni giorno lavorativo
+        Ritorna lista di {day, produced, week} solo per giorni lavorativi.
+        """
+        import calendar
+
+        days_in_month = calendar.monthrange(year, month)[1]
+        today = date.today()
+
+        # Build map of day -> produced from raw data
+        raw_map = {}
+        for h in raw_history:
+            raw_map[h["day"]] = h["produced"]
+
+        # Identify all working days and build result
+        working_days = []  # list of date objects that are working days
+        for d in range(1, days_in_month + 1):
+            dt = date(year, month, d)
+            if dt > today:
+                break
+            if self.config.holidays.is_working_day(dt):
+                working_days.append(dt)
+
+        # For each non-working day, find the previous working day and add production to it
+        merged = {}  # day_number -> total produced
+        for wd in working_days:
+            merged[wd.day] = raw_map.get(wd.day, 0)
+
+        for d in range(1, days_in_month + 1):
+            dt = date(year, month, d)
+            if dt > today:
+                break
+            if not self.config.holidays.is_working_day(dt):
+                prod = raw_map.get(d, 0)
+                if prod > 0:
+                    # Find previous working day
+                    prev_wd = None
+                    for wd in reversed(working_days):
+                        if wd < dt:
+                            prev_wd = wd
+                            break
+                    if prev_wd:
+                        merged[prev_wd.day] = merged.get(prev_wd.day, 0) + prod
+                    else:
+                        # No previous working day in this month; find next working day
+                        for wd in working_days:
+                            if wd > dt:
+                                merged[wd.day] = merged.get(wd.day, 0) + prod
+                                break
+
+        # Build result with week numbers
+        result = []
+        for wd in working_days:
+            produced = merged.get(wd.day, 0)
+            iso_week = wd.isocalendar()[1]
+            result.append({
+                "day": wd.day,
+                "produced": produced,
+                "week": iso_week
+            })
+
+        logger.info("History merged: %d raw days -> %d working days", len(raw_history), len(result))
+        return result
+
+    def _build_phase_summary(self, rows: List[MonitorRow], conn) -> List[dict]:
+        """
+        Aggrega i dati per fase: somma planned_qty_day e qty_done per phase.
+        Include anche la produzione per fasi non nel piano (da DB diretto).
+        """
+        # Aggregate from dashboard rows (planned phases)
+        phase_data: Dict[str, dict] = {}
+        for r in rows:
+            phase = r.phase
+            if phase not in phase_data:
+                phase_data[phase] = {"phase": phase, "planned": 0, "produced": 0}
+            if not r.is_out_of_plan:
+                phase_data[phase]["planned"] += r.planned_qty_day
+            phase_data[phase]["produced"] += r.qty_done
+
+        # Also get ALL production by phase from DB (includes non-planned phases)
+        db_phases = get_today_production_by_phase(conn)
+        for dp in db_phases:
+            pname = dp["phase_name"]
+            if pname not in phase_data:
+                phase_data[pname] = {"phase": pname, "planned": 0, "produced": dp["produced"]}
+            else:
+                # Use DB value as it's more complete (includes non-planned orders)
+                phase_data[pname]["produced"] = max(phase_data[pname]["produced"], dp["produced"])
+
+        return sorted(phase_data.values(), key=lambda x: x["phase"])
+
     def get_status(self) -> dict:
         with self._lock:
             return dict(self.dashboard_data)
+
+    def get_output_status(self) -> dict:
+        with self._lock:
+            return dict(self.output_data)

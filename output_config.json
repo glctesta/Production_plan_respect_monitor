@@ -1,0 +1,7 @@
+{
+    "daily_target": 2000,
+    "chart_title": "Output VDW RO",
+    "rotation_show_seconds": 300,
+    "rotation_cycle_seconds": 900,
+    "output_poll_seconds": 60
+}
