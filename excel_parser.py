@@ -202,9 +202,17 @@ def get_plan_for_dates(plan_rows: List[PlanRow], dates: List[date]) -> List[Plan
 
 def check_order_in_past_plan(all_plan: List[PlanRow], order_number: str,
                               today: date = None, lookback_days: int = 2) -> Optional[PlanRow]:
-    """Cerca se l'ordine era pianificato nei giorni lavorativi precedenti (max lookback_days)."""
+    """Cerca se l'ordine era pianificato nei giorni lavorativi precedenti.
+    Se lookback_days e' None, cerca in tutti i giorni passati presenti nel piano."""
     if today is None:
         today = date.today()
+    if lookback_days is None:
+        # Cerca in tutte le date passate presenti nel piano, dalla piu' recente
+        past_matches = [pr for pr in all_plan
+                        if pr.order_number == order_number and pr.production_date < today]
+        if past_matches:
+            return max(past_matches, key=lambda pr: pr.production_date)
+        return None
     past_days = _get_working_days_back(today, lookback_days)
     for d in past_days:
         for pr in all_plan:

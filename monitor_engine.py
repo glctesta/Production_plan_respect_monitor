@@ -111,8 +111,8 @@ def _enrich_out_of_plan(snap: SnapshotRow, all_plan: List[PlanRow],
     - "" = nessun contesto trovato
     on_future: data pianificata se si sta producendo in anticipo (solo per "yellow").
     """
-    # 1. Cerca nei 2 giorni lavorativi precedenti
-    past_match = check_order_in_past_plan(all_plan, snap.order_number, today, lookback_days=2)
+    # 1. Cerca in TUTTI i giorni lavorativi precedenti (senza limite)
+    past_match = check_order_in_past_plan(all_plan, snap.order_number, today, lookback_days=None)
     if past_match:
         # Verifica produzione effettiva in quel giorno
         past_qty = None
