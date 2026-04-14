@@ -499,7 +499,7 @@ function renderOutputChart(history, target) {
                 {
                     label: 'AVERAGE',
                     data: averageData,
-                    borderColor: '#1a3a6e',
+                    borderColor: '#f39c12',
                     borderWidth: 2,
                     pointRadius: 0,
                     tension: 0.3,

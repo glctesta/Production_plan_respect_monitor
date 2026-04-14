@@ -24,12 +24,12 @@ holidays:
     - "2026-01-01"   # Anul Nou
     - "2026-01-02"   # Anul Nou (giorno 2)
     - "2026-01-24"   # Ziua Unirii Principatelor Romane
-    - "2026-04-19"   # Pastele ortodox (Duminica)
-    - "2026-04-20"   # Pastele ortodox (Lunea)
+    - "2026-04-10"   # Vinerea Mare (Pastele ortodox)
+    - "2026-04-13"   # Pastele ortodox (Lunea)
     - "2026-05-01"   # Ziua Muncii
     - "2026-06-01"   # Ziua Copilului
-    - "2026-06-07"   # Rusaliile (Duminica)
-    - "2026-06-08"   # Rusaliile (Lunea)
+    - "2026-05-31"   # Rusaliile (Duminica)
+    - "2026-06-01"   # Rusaliile (Lunea)
     - "2026-08-15"   # Adormirea Maicii Domnului
     - "2026-11-30"   # Sfantul Andrei
     - "2026-12-01"   # Ziua Nationala a Romaniei
