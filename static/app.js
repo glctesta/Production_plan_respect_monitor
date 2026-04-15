@@ -390,11 +390,28 @@ function renderOutputPage(data) {
         forecastEl.className = 'output-forecast-bad';
     }
 
+    // Month average
+    const history = data.history || [];
+    const monthAvgEl = document.getElementById('output-month-avg');
+    if (history.length > 0) {
+        const totalProduced = history.reduce((sum, h) => sum + h.produced, 0);
+        const monthAvg = Math.round(totalProduced / history.length);
+        monthAvgEl.textContent = monthAvg;
+        if (monthAvg >= target) {
+            monthAvgEl.className = 'output-avg-positive';
+        } else {
+            monthAvgEl.className = 'output-avg-negative';
+        }
+    } else {
+        monthAvgEl.textContent = '-';
+        monthAvgEl.className = 'output-avg-value';
+    }
+
     // Render phase table
     renderPhaseTable(data.phases || []);
 
     // Render chart
-    renderOutputChart(data.history || [], data.target || 2000);
+    renderOutputChart(history, data.target || 2000);
 }
 
 function renderPhaseTable(phases) {
