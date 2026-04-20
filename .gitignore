@@ -3,7 +3,9 @@ __pycache__/
 logs/
 *.log
 .claude/
+PlanRespect.zip
 PlanRespect_deploy.zip
+PlanRespect_deploy_*.zip
 node_modules/
 package.json
 package-lock.json

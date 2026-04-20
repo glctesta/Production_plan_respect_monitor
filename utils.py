@@ -7,6 +7,30 @@ import os
 
 logger = logging.getLogger("TraceabilityRS")  # usa la config fatta in main.py
 
+
+# ── Filtraggio fasi visibili ─────────────────────────────────────────────────
+# A video e nelle email vengono mostrate solo le fasi AOI (rinominate "SMT")
+# e PTHM. Tutte le altre fasi restano invisibili all'utente, pur continuando
+# a essere elaborate internamente (snapshot/PlanAlerts/output DB).
+def is_visible_phase(phase_name: Optional[str]) -> bool:
+    """True se la fase va mostrata all'utente (AOI o PTHM in qualunque variante)."""
+    if not phase_name:
+        return False
+    up = phase_name.upper()
+    return ("AOI" in up) or ("PTHM" in up)
+
+
+def display_phase_name(phase_name: Optional[str]) -> str:
+    """
+    Ritorna il nome da visualizzare. Per convenzione aziendale il reparto
+    denominato 'AOI' in DB viene mostrato come 'SMT' in UI ed email. 'PTHM'
+    resta invariato. Altre fasi tornano il nome originale (per sicurezza).
+    """
+    if not phase_name:
+        return ""
+    # Sostituisce 'AOI' con 'SMT' preservando eventuali suffissi/prefissi
+    return re.sub(r'AOI', 'SMT', phase_name, flags=re.IGNORECASE)
+
 def get_email_recipients(conn, attribute: str = 'Sys_Email_Purchase') -> List[str]:
     """
     Recupera gli indirizzi email dei destinatari dal database per lo specifico attributo.

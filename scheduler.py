@@ -13,6 +13,7 @@ from db_queries import (get_db_connection, insert_snapshots, read_unchecked_snap
                         get_monthly_daily_production, get_today_production_by_phase)
 from monitor_engine import build_dashboard_data, compute_summary, MonitorRow
 from email_alerter import EmailAlertManager
+from utils import is_visible_phase, display_phase_name
 
 logger = logging.getLogger("PlanMonitor")
 
@@ -298,9 +299,14 @@ class CycleOrchestrator:
                     logger.error("Error building output data: %s", e)
 
                 # 7. Aggiorna stato condiviso
+                #    Solo le fasi visibili (AOI -> SMT, PTHM) finiscono nella UI
+                #    e nelle email. Le altre fasi restano in snapshots/PlanAlerts
+                #    ma non vengono rappresentate all'utente.
+                visible_rows = [r for r in rows if is_visible_phase(r.phase)]
+                visible_summary = compute_summary(visible_rows)
                 with self._lock:
-                    self.dashboard_data["rows"] = [r.to_dict() for r in rows]
-                    self.dashboard_data["summary"] = summary
+                    self.dashboard_data["rows"] = [r.to_dict() for r in visible_rows]
+                    self.dashboard_data["summary"] = visible_summary
                     self.dashboard_data["excel_file"] = excel_file
                     self.dashboard_data["excel_modified"] = excel_modified
                     self.dashboard_data["last_update"] = datetime.now().isoformat()
@@ -440,11 +446,15 @@ class CycleOrchestrator:
         """
         Aggrega i dati per fase: somma planned_qty_day e qty_done per phase.
         Include anche la produzione per fasi non nel piano (da DB diretto).
+        Mostra solo le fasi AOI (rinominate SMT) e PTHM; le altre fasi sono
+        ignorate in questa vista.
         """
         # Aggregate from dashboard rows (planned phases)
         phase_data: Dict[str, dict] = {}
         for r in rows:
-            phase = r.phase
+            if not is_visible_phase(r.phase):
+                continue
+            phase = display_phase_name(r.phase)
             if phase not in phase_data:
                 phase_data[phase] = {"phase": phase, "planned": 0, "produced": 0}
             if not r.is_out_of_plan:
@@ -454,7 +464,10 @@ class CycleOrchestrator:
         # Also get ALL production by phase from DB (includes non-planned phases)
         db_phases = get_today_production_by_phase(conn)
         for dp in db_phases:
-            pname = dp["phase_name"]
+            raw_name = dp["phase_name"]
+            if not is_visible_phase(raw_name):
+                continue
+            pname = display_phase_name(raw_name)
             if pname not in phase_data:
                 phase_data[pname] = {"phase": pname, "planned": 0, "produced": dp["produced"]}
             else:

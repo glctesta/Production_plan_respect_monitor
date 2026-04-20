@@ -35,10 +35,13 @@ class MonitorRow:
     on_future: Optional[date] = None  # Data pianificata se si produce in anticipo
 
     def to_dict(self) -> dict:
+        from utils import display_phase_name
         d = asdict(self)
         d["planning_date"] = self.planning_date.isoformat() if self.planning_date else None
         d["snapshot_time"] = self.snapshot_time.isoformat() if self.snapshot_time else None
         d["on_future"] = self.on_future.isoformat() if self.on_future else None
+        # Rename convenzione aziendale AOI -> SMT per la sola UI/email.
+        d["phase"] = display_phase_name(self.phase)
         return d
 
 
