@@ -15,8 +15,8 @@ let rotationElapsed = 0; // seconds elapsed in current rotation phase
 let outputConfig = {
     daily_target: 2000,
     chart_title: "Output VDW RO",
-    rotation_show_seconds: 300,   // 5 min output page
-    rotation_cycle_seconds: 900,  // 15 min total cycle
+    rotation_show_seconds: 150,   // 2.5 min output page
+    rotation_cycle_seconds: 300,  // 5 min total cycle (2.5 min dashboard + 2.5 min output)
     output_poll_seconds: 60
 };
 

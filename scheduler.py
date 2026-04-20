@@ -69,7 +69,7 @@ class CycleOrchestrator:
         except Exception as e:
             logger.warning("Could not load output_config.json: %s, using defaults", e)
             return {"daily_target": 2000, "chart_title": "Output VDW RO",
-                    "rotation_show_seconds": 300, "rotation_cycle_seconds": 900,
+                    "rotation_show_seconds": 150, "rotation_cycle_seconds": 300,
                     "output_poll_seconds": 60}
 
     def _is_within_workday(self) -> bool:
